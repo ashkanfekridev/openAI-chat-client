@@ -26,6 +26,20 @@ return [
         'api_key' => env('OPENAI_API_KEY'),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
         'model' => env('OPENAI_MODEL', 'gpt-5.6-sol'),
+        'models' => [
+            'gpt-5.6-sol' => [
+                'label' => 'GPT-5.6 Sol',
+                'description' => 'بالاترین کیفیت',
+            ],
+            'gpt-5.6-terra' => [
+                'label' => 'GPT-5.6 Terra',
+                'description' => 'متعادل و سریع',
+            ],
+            'gpt-5.6-luna' => [
+                'label' => 'GPT-5.6 Luna',
+                'description' => 'سریع و اقتصادی',
+            ],
+        ],
     ],
 
     'ses' => [
