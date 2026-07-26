@@ -1,58 +1,162 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# گپ — کلاینت چت OpenAI
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+یک رابط چت فارسی و راست‌چین برای OpenAI که با Laravel و Tailwind CSS ساخته شده است. گپ از Responses API استفاده می‌کند و گفتگوها، پیام‌ها و فایل‌های هر کاربر را در خود برنامه نگه می‌دارد.
 
-## About Laravel
+## امکانات
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- چت پیوسته با حفظ زمینه گفتگو از طریق `previous_response_id`
+- ذخیره و نمایش تاریخچه گفتگوها
+- انتخاب مدل از داخل پنل کاربر
+- آپلود هم‌زمان حداکثر ۵ فایل یا تصویر
+- مشاهده تصاویر و دانلود فایل‌های پیوست‌شده
+- ساخت تصویر با ابزار Image Generation در OpenAI
+- نمایش امن پاسخ‌های Markdown به‌صورت HTML
+- پشتیبانی از تیتر، فهرست، جدول، نقل‌قول، لینک و بلوک کد در پاسخ‌ها
+- حالت روشن و تاریک با ذخیره انتخاب کاربر
+- رابط واکنش‌گرا برای موبایل و دسکتاپ
+- پیام‌های خطای فارسی و محدودسازی نرخ درخواست‌ها
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## نکته درباره تاریخچه
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+OpenAI API فهرستی از تمام گفتگوهای انجام‌شده با یک API Key در اختیار این برنامه قرار نمی‌دهد. به همین دلیل گپ فقط گفتگوهایی را نمایش می‌دهد که از طریق همین برنامه ایجاد و در دیتابیس آن ذخیره شده‌اند.
 
-## Learning Laravel
+گفتگوها با یک شناسه ناشناس در کوکی `chat_owner_token` از هم جدا می‌شوند. در نتیجه هر مرورگر یا پروفایل مرورگر فقط تاریخچه متعلق به همان شناسه را می‌بیند. پاک‌کردن کوکی مرورگر باعث می‌شود تاریخچه قبلی دیگر از رابط کاربری قابل دسترسی نباشد، هرچند رکوردها تا زمان حذف از دیتابیس باقی می‌مانند.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## فناوری‌ها
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- PHP 8.3 یا جدیدتر
+- Laravel 13
+- Tailwind CSS 4
+- Vite 8
+- SQLite به‌صورت پیش‌فرض
+- Pest 4 برای تست‌ها
+- OpenAI Responses API
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## پیش‌نیازها
 
-## Agentic Development
+- PHP و افزونه‌های موردنیاز Laravel
+- Composer
+- Node.js و npm
+- یک OpenAI API Key معتبر با دسترسی به مدل‌های پیکربندی‌شده
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## نصب و راه‌اندازی
+
+ابتدا وابستگی‌ها و فایل محیطی را آماده کنید:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
+npm install
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+کلید OpenAI را در فایل `.env` قرار دهید:
 
-## Contributing
+```dotenv
+OPENAI_API_KEY=sk-your-api-key
+OPENAI_MODEL=gpt-5.6-sol
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+سپس دیتابیس و فایل‌های فرانت‌اند را آماده کنید:
 
-## Code of Conduct
+```bash
+php artisan migrate
+npm run build
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+برای اجرای محیط توسعه:
 
-## Security Vulnerabilities
+```bash
+composer run dev
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+این فرمان سرور Laravel، پردازش صف، نمایش لاگ‌ها و Vite را هم‌زمان اجرا می‌کند. آدرس دقیق برنامه در خروجی `php artisan serve` نمایش داده می‌شود.
 
-## License
+## تنظیمات OpenAI
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+تنظیمات اصلی در `config/services.php` قرار دارند:
+
+| متغیر محیطی | مقدار پیش‌فرض | توضیح |
+|---|---|---|
+| `OPENAI_API_KEY` | ندارد | کلید محرمانه OpenAI؛ الزامی است |
+| `OPENAI_MODEL` | `gpt-5.6-sol` | مدل پیش‌فرض انتخاب‌شده در رابط |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | آدرس پایه API |
+
+مدل‌های قابل انتخاب در آرایه `services.openai.models` تعریف شده‌اند. در نسخه فعلی این موارد در رابط نمایش داده می‌شوند:
+
+- `gpt-5.6-sol` — بالاترین کیفیت
+- `gpt-5.6-terra` — متعادل و سریع
+- `gpt-5.6-luna` — سریع و اقتصادی
+
+حالت ساخت تصویر در نسخه فعلی همیشه از `gpt-5.6-sol`، کیفیت `medium` و ابعاد `1024x1024` استفاده می‌کند.
+
+اگر تنظیمات Laravel کش شده‌اند، پس از تغییر `.env` این فرمان را اجرا کنید:
+
+```bash
+php artisan config:clear
+```
+
+## فایل‌ها و تصاویر
+
+فرمت‌های مجاز عبارت‌اند از:
+
+- تصویر: `jpg`، `jpeg`، `png`، `webp` و `gif`
+- سند و متن: `pdf`، `txt`، `md`، `json`، `html` و `xml`
+- داده و آفیس: `csv`، `xls`، `xlsx`، `doc`، `docx`، `ppt` و `pptx`
+
+در هر پیام حداکثر ۵ فایل و برای هر فایل حداکثر ۱۰ مگابایت مجاز است. فایل‌ها و تصاویر تولیدشده در دیسک خصوصی `local` و زیر مسیر `chat-attachments` ذخیره می‌شوند و فقط از route کنترل‌شده برنامه قابل دریافت هستند.
+
+## نمایش Markdown
+
+فقط پاسخ‌های دستیار به HTML تبدیل می‌شوند و پیام‌های کاربر به‌شکل متن ساده باقی می‌مانند. رندر پاسخ با ساخت مستقیم DOM انجام می‌شود؛ HTML خام مدل وارد صفحه نمی‌شود و لینک‌ها فقط با پروتکل‌های امن `http`، `https` و `mailto` فعال می‌شوند.
+
+## ساختار داده
+
+- `conversations`: عنوان، مدل انتخاب‌شده، شناسه مالک ناشناس و آخرین شناسه پاسخ OpenAI
+- `chat_messages`: نقش پیام، متن و metadata فایل‌های پیوست‌شده
+- فایل‌ها: ذخیره در `storage/app/private/chat-attachments`
+
+برای ادامه یک گفتگو، آخرین `openai_response_id` ذخیره و در درخواست بعدی به‌عنوان `previous_response_id` ارسال می‌شود.
+
+## مسیرهای برنامه
+
+| متد | مسیر | کاربرد | محدودیت نرخ |
+|---|---|---|---|
+| `GET` | `/` | نمایش رابط و تاریخچه گفتگوها | — |
+| `POST` | `/chat` | ارسال پیام، فایل یا درخواست ساخت تصویر | ۱۰ درخواست در دقیقه |
+| `GET` | `/conversations/{conversation}` | دریافت پیام‌های یک گفتگو | ۶۰ درخواست در دقیقه |
+| `GET` | `/conversations/{conversation}/messages/{chatMessage}/attachments/{attachment}` | مشاهده یا دانلود پیوست | ۱۲۰ درخواست در دقیقه |
+
+دسترسی به گفتگو و پیوست بر اساس شناسه مالک موجود در کوکی بررسی می‌شود و منابع متعلق به شناسه‌های دیگر با پاسخ 404 مخفی می‌شوند.
+
+## توسعه و تست
+
+اجرای تست‌ها:
+
+```bash
+php artisan test --compact
+```
+
+فرمت‌کردن کد PHP:
+
+```bash
+vendor/bin/pint --dirty --format agent
+```
+
+ساخت نسخه production فرانت‌اند:
+
+```bash
+npm run build
+```
+
+## امنیت و استقرار
+
+- هرگز فایل `.env` یا مقدار `OPENAI_API_KEY` را commit نکنید.
+- کلید API فقط در سرور استفاده می‌شود و به JavaScript مرورگر ارسال نمی‌شود.
+- در محیط production مقدار `APP_DEBUG=false` و یک `APP_URL` صحیح تنظیم کنید.
+- برای استفاده چندکاربره جدی، احراز هویت Laravel را جایگزین مالکیت مبتنی بر کوکی کنید.
+- سیاست نگهداری و حذف دوره‌ای گفتگوها و فایل‌ها را متناسب با نیاز خود اضافه کنید.
+
+## مجوز
+
+این پروژه بر پایه Laravel ساخته شده و تحت مجوز MIT قابل استفاده است.
