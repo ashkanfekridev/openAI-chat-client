@@ -497,6 +497,36 @@ if (chat) {
         errorBox.hidden = false;
     }
 
+    function requestNotificationPermission() {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => {});
+        }
+    }
+
+    function notifyCompletedResponse(conversation, assistantMessage) {
+        if (!('Notification' in window)
+            || Notification.permission !== 'granted'
+            || (!document.hidden && document.hasFocus())) {
+            return;
+        }
+
+        const preview = String(assistantMessage.content ?? '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 160);
+        const notification = new Notification(`پاسخ آماده شد — ${conversation.title}`, {
+            body: preview || 'پاسخ دستیار آماده مشاهده است.',
+            icon: '/favicon.ico',
+            tag: `conversation-${conversation.id}`,
+        });
+
+        notification.addEventListener('click', () => {
+            window.focus();
+            window.location.href = conversationPageUrl(conversation.id);
+            notification.close();
+        });
+    }
+
     function resizeInput() {
         input.style.height = 'auto';
         input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
@@ -709,6 +739,7 @@ if (chat) {
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
+        requestNotificationPermission();
         const message = input.value.trim();
 
         if (!message && selectedFiles.length === 0) {
@@ -757,6 +788,7 @@ if (chat) {
             currentConversationId = data.conversation.id;
             currentTitle.textContent = data.conversation.title;
             modelSelect.value = data.conversation.model;
+            notifyCompletedResponse(data.conversation, data.assistant_message);
             pendingMessage.remove();
             addMessage(data.user_message.role, data.user_message.content, data.user_message.attachments, data.user_message);
             await streamAssistantMessage(data.assistant_message);
