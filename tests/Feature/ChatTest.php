@@ -2,6 +2,7 @@
 
 use App\Models\ChatMessage;
 use App\Models\Conversation;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -10,45 +11,61 @@ use Illuminate\Support\Str;
 beforeEach(function () {
     config()->set('services.openai.api_key', 'test-key');
     config()->set('services.openai.model', 'gpt-5.6-sol');
-    $this->ownerToken = (string) Str::uuid();
-    $this->withCredentials();
+    $this->user = User::factory()->create();
+    $this->actingAs($this->user);
 });
 
-test('the chat page displays only the current browser history', function () {
+test('the chat page displays only the authenticated user history', function () {
     $visibleConversation = Conversation::factory()->create([
-        'owner_token' => $this->ownerToken,
+        'user_id' => $this->user->id,
         'title' => 'گفتگوی قابل مشاهده',
     ]);
     Conversation::factory()->create(['title' => 'گفتگوی مرورگر دیگر']);
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->get(route('chat'))
+    $this->get(route('chat'))
         ->assertOk()
         ->assertSee('data-theme-toggle', false)
+        ->assertSee('data-chat-form', false)
+        ->assertSee('method="POST" action="'.route('chat.send').'"', false)
         ->assertSee('GPT-5.6 Terra')
         ->assertSee($visibleConversation->title)
         ->assertDontSee('گفتگوی مرورگر دیگر');
 });
 
+test('the legacy get chat address opens the chat page', function () {
+    $this->get('/chat')->assertOk()->assertSee('data-chat-form', false);
+});
+
 test('a saved conversation can be opened', function () {
-    $conversation = Conversation::factory()->create(['owner_token' => $this->ownerToken]);
+    $conversation = Conversation::factory()->create(['user_id' => $this->user->id]);
     ChatMessage::factory()->for($conversation)->create([
         'role' => 'user',
         'content' => 'پیام ذخیره‌شده',
     ]);
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->getJson(route('conversations.show', $conversation))
+    $this->getJson(route('conversations.show', $conversation))
         ->assertOk()
         ->assertJsonPath('conversation.id', $conversation->id)
         ->assertJsonPath('messages.0.content', 'پیام ذخیره‌شده');
 });
 
-test('another browser cannot open a conversation', function () {
+test('a conversation can be opened directly from its history link', function () {
+    $conversation = Conversation::factory()->create([
+        'user_id' => $this->user->id,
+        'title' => 'گفتگوی لینک‌شده',
+    ]);
+
+    $this->get(route('chat', ['conversation' => $conversation->id]))
+        ->assertOk()
+        ->assertSee('data-initial-conversation-id="'.$conversation->id.'"', false)
+        ->assertSee('href="'.route('chat', ['conversation' => $conversation->id]).'"', false)
+        ->assertSee('گفتگوی لینک‌شده');
+});
+
+test('another user cannot open a conversation', function () {
     $conversation = Conversation::factory()->create();
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->getJson(route('conversations.show', $conversation))
+    $this->getJson(route('conversations.show', $conversation))
         ->assertNotFound();
 });
 
@@ -57,8 +74,7 @@ test('a message creates a saved conversation', function () {
         'api.openai.com/v1/responses' => Http::response(openAIResponse()),
     ]);
 
-    $response = $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->postJson(route('chat.send'), chatPayload(['message' => 'سلام، حالت چطوره؟']))
+    $response = $this->postJson(route('chat.send'), chatPayload(['message' => 'سلام، حالت چطوره؟']))
         ->assertOk()
         ->assertJsonPath('message', 'سلام! چطور می‌توانم کمک کنم؟')
         ->assertJsonPath('conversation.title', 'سلام، حالت چطوره؟');
@@ -67,7 +83,7 @@ test('a message creates a saved conversation', function () {
 
     $this->assertDatabaseHas('conversations', [
         'id' => $conversationId,
-        'owner_token' => $this->ownerToken,
+        'user_id' => $this->user->id,
         'model' => 'gpt-5.6-sol',
         'openai_response_id' => 'resp_123',
     ]);
@@ -80,24 +96,31 @@ test('a message creates a saved conversation', function () {
         'conversation_id' => $conversationId,
         'role' => 'assistant',
         'content' => 'سلام! چطور می‌توانم کمک کنم؟',
+        'input_tokens' => 120,
+        'output_tokens' => 30,
+        'total_tokens' => 150,
     ]);
+
+    $this->user->refresh();
+    expect($this->user->input_tokens_used)->toBe(120)
+        ->and($this->user->output_tokens_used)->toBe(30)
+        ->and($this->user->total_tokens_used)->toBe(150);
 });
 
 test('a message continues the selected conversation', function () {
     $conversation = Conversation::factory()->create([
-        'owner_token' => $this->ownerToken,
+        'user_id' => $this->user->id,
         'openai_response_id' => 'resp_previous123',
     ]);
     Http::fake([
         'api.openai.com/v1/responses' => Http::response(openAIResponse()),
     ]);
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->postJson(route('chat.send'), chatPayload([
-            'message' => 'ادامه بده',
-            'conversation_id' => $conversation->id,
-            'model' => 'gpt-5.6-terra',
-        ]))
+    $this->postJson(route('chat.send'), chatPayload([
+        'message' => 'ادامه بده',
+        'conversation_id' => $conversation->id,
+        'model' => 'gpt-5.6-terra',
+    ]))
         ->assertOk()
         ->assertJsonPath('conversation.id', $conversation->id);
 
@@ -118,8 +141,7 @@ test('an openai failure returns a safe error without saving messages', function 
         'api.openai.com/v1/responses' => Http::response(['error' => ['message' => 'Invalid key']], 401),
     ]);
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->postJson(route('chat.send'), chatPayload(['message' => 'سلام']))
+    $this->postJson(route('chat.send'), chatPayload(['message' => 'سلام']))
         ->assertStatus(502)
         ->assertJsonPath('message', 'ارتباط با OpenAI ناموفق بود. تنظیمات کلید و مدل را بررسی کنید.');
 
@@ -133,11 +155,10 @@ test('an uploaded image is sent to the model and saved with the message', functi
     ]);
     $image = UploadedFile::fake()->create('photo.png', 100, 'image/png');
 
-    $response = $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->post(route('chat.send'), [
-            ...chatPayload(['message' => 'این تصویر چیست؟']),
-            'files' => [$image],
-        ], ['Accept' => 'application/json'])
+    $response = $this->post(route('chat.send'), [
+        ...chatPayload(['message' => 'این تصویر چیست؟']),
+        'files' => [$image],
+    ], ['Accept' => 'application/json'])
         ->assertOk()
         ->assertJsonPath('user_message.attachments.0.kind', 'image');
 
@@ -149,8 +170,7 @@ test('an uploaded image is sent to the model and saved with the message', functi
         'data:image/png;base64,',
     ));
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->get($response->json('user_message.attachments.0.url'))
+    $this->get($response->json('user_message.attachments.0.url'))
         ->assertOk();
 });
 
@@ -167,12 +187,11 @@ test('image mode generates and saves an image', function () {
         ]),
     ]);
 
-    $this->withCookie('chat_owner_token', $this->ownerToken)
-        ->postJson(route('chat.send'), chatPayload([
-            'message' => 'یک روباه در جنگل بساز',
-            'mode' => 'image',
-            'model' => 'gpt-5.6-luna',
-        ]))
+    $this->postJson(route('chat.send'), chatPayload([
+        'message' => 'یک روباه در جنگل بساز',
+        'mode' => 'image',
+        'model' => 'gpt-5.6-luna',
+    ]))
         ->assertOk()
         ->assertJsonPath('assistant_message.attachments.0.kind', 'image');
 
@@ -184,6 +203,75 @@ test('image mode generates and saves an image', function () {
         && $request['tool_choice']['type'] === 'image_generation');
 });
 
+test('a user cannot send a message after reaching the token limit', function () {
+    $this->user->forceFill([
+        'token_limit' => 100,
+        'total_tokens_used' => 100,
+    ])->save();
+    Http::preventStrayRequests();
+
+    $this->postJson(route('chat.send'), chatPayload())
+        ->assertTooManyRequests()
+        ->assertJsonPath('message', 'سقف مصرف شما به پایان رسیده است. برای افزایش سقف با مدیر تماس بگیرید.');
+
+    Http::assertNothingSent();
+});
+
+test('legacy browser conversations are assigned to the authenticated user', function () {
+    $ownerToken = (string) Str::uuid();
+    $conversation = Conversation::factory()->create([
+        'user_id' => null,
+        'owner_token' => $ownerToken,
+        'title' => 'گفتگوی قدیمی',
+    ]);
+
+    $this->withCookie('chat_owner_token', $ownerToken)
+        ->get(route('chat'))
+        ->assertOk()
+        ->assertSee('گفتگوی قدیمی');
+
+    expect($conversation->refresh()->user_id)->toBe($this->user->id);
+});
+
+test('conversation settings enable reasoning web search knowledge and citations', function () {
+    $this->user->forceFill(['vector_store_id' => 'vs_123'])->save();
+    $conversation = Conversation::factory()->for($this->user)->create([
+        'system_prompt' => 'Only answer from reliable sources.',
+        'reasoning_effort' => 'high',
+        'temperature' => 0.3,
+        'web_search' => true,
+        'use_knowledge' => true,
+    ]);
+    $response = openAIResponse();
+    $response['output'][0]['content'][0]['annotations'] = [[
+        'type' => 'url_citation',
+        'title' => 'OpenAI Docs',
+        'url' => 'https://developers.openai.com/',
+    ]];
+    Http::fake(['api.openai.com/v1/responses' => Http::response($response)]);
+
+    $this->postJson(route('chat.send'), chatPayload(['conversation_id' => $conversation->id]))
+        ->assertOk()
+        ->assertJsonPath('assistant_message.citations.0.title', 'OpenAI Docs');
+
+    Http::assertSent(fn ($request): bool => $request['instructions'] === 'Only answer from reliable sources.'
+        && $request['reasoning']['effort'] === 'high'
+        && $request['temperature'] === 0.3
+        && collect($request['tools'])->contains(fn ($tool) => $tool['type'] === 'web_search')
+        && collect($request['tools'])->contains(fn ($tool) => $tool['type'] === 'file_search' && $tool['vector_store_ids'] === ['vs_123']));
+
+    expect(ChatMessage::query()->where('role', 'assistant')->value('estimated_cost_micros'))->toBeGreaterThan(0);
+});
+
+test('a user cannot use a model that is not allowed for their account', function () {
+    $this->user->forceFill(['allowed_models' => ['gpt-5.6-terra']])->save();
+    Http::preventStrayRequests();
+
+    $this->postJson(route('chat.send'), chatPayload(['model' => 'gpt-5.6-sol']))
+        ->assertForbidden()
+        ->assertJsonPath('message', 'این مدل برای حساب شما مجاز نیست.');
+});
+
 /**
  * @return array<string, mixed>
  */
@@ -192,6 +280,11 @@ function openAIResponse(): array
     return [
         'id' => 'resp_123',
         'model' => 'gpt-5.6-sol',
+        'usage' => [
+            'input_tokens' => 120,
+            'output_tokens' => 30,
+            'total_tokens' => 150,
+        ],
         'output' => [[
             'type' => 'message',
             'content' => [[

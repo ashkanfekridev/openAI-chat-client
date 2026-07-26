@@ -23,6 +23,9 @@ class ChatMessageFactory extends Factory
             'role' => fake()->randomElement(['user', 'assistant']),
             'content' => fake()->paragraph(),
             'attachments' => null,
+            'input_tokens' => 0,
+            'output_tokens' => 0,
+            'total_tokens' => 0,
         ];
     }
 }

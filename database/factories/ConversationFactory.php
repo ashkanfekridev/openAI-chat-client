@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Conversation;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -19,6 +20,7 @@ class ConversationFactory extends Factory
     public function definition(): array
     {
         return [
+            'user_id' => User::factory(),
             'owner_token' => fake()->uuid(),
             'title' => fake()->sentence(4),
             'model' => fake()->randomElement(array_keys(config('services.openai.models'))),

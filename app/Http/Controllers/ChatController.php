@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\SendChatMessageRequest;
 use App\Models\Conversation;
+use App\Models\User;
 use App\Services\ChatOwner;
 use App\Services\OpenAIClient;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -24,13 +25,28 @@ class ChatController extends Controller
         OpenAIClient $openAI,
         ChatOwner $chatOwner,
     ): JsonResponse {
+        /** @var User|null $user */
+        $user = $request->user();
+        abort_if($user === null, 401);
+        $user->refreshExpiredUsagePeriod();
+
+        if (! $user->is_active) {
+            return response()->json(['message' => 'حساب کاربری شما غیرفعال است.'], 403);
+        }
+
+        if ($user->hasReachedTokenLimit()) {
+            return response()->json([
+                'message' => 'سقف مصرف شما به پایان رسیده است. برای افزایش سقف با مدیر تماس بگیرید.',
+            ], 429);
+        }
+
         $ownerToken = $chatOwner->token($request);
         $conversationId = $request->validated('conversation_id');
         $conversation = null;
 
         if (is_string($conversationId)) {
             $conversation = Conversation::query()
-                ->where('owner_token', $ownerToken)
+                ->whereBelongsTo($user)
                 ->find($conversationId);
 
             if ($conversation === null) {
@@ -40,6 +56,10 @@ class ChatController extends Controller
 
         $message = $request->string('message')->toString();
         $model = $request->string('model')->toString();
+
+        if (! $user->canUseModel($model)) {
+            return response()->json(['message' => 'این مدل برای حساب شما مجاز نیست.'], 403);
+        }
         $generateImage = $request->string('mode')->toString() === 'image';
         /** @var list<UploadedFile> $files */
         $files = array_values($request->file('files', []));
@@ -51,17 +71,24 @@ class ChatController extends Controller
                 $model,
                 $files,
                 $generateImage,
+                $conversation?->system_prompt,
+                $conversation?->reasoning_effort ?? 'none',
+                $conversation?->temperature,
+                $conversation?->web_search ?? false,
+                $conversation?->use_knowledge ? $user->vector_store_id : null,
             );
 
             [$conversation, $userMessage, $assistantMessage] = DB::transaction(function () use (
                 $conversation,
                 $ownerToken,
+                $user,
                 $message,
                 $model,
                 $files,
                 $result,
             ): array {
                 $conversation ??= Conversation::query()->create([
+                    'user_id' => $user->id,
                     'owner_token' => $ownerToken,
                     'title' => Str::limit(Str::squish($message ?: $files[0]->getClientOriginalName()), 48),
                     'model' => $model,
@@ -76,6 +103,12 @@ class ChatController extends Controller
                     'role' => 'assistant',
                     'content' => $result['message'],
                     'attachments' => $this->storeGeneratedImages($conversation, $result['images']),
+                    'input_tokens' => $result['usage']['input_tokens'],
+                    'output_tokens' => $result['usage']['output_tokens'],
+                    'total_tokens' => $result['usage']['total_tokens'],
+                    'openai_response_id' => $result['id'],
+                    'citations' => $result['citations'],
+                    'estimated_cost_micros' => $result['estimated_cost_micros'],
                 ]);
 
                 $conversation->update([
@@ -83,10 +116,19 @@ class ChatController extends Controller
                     'openai_response_id' => $result['id'],
                 ]);
 
+                User::query()
+                    ->whereKey($user->id)
+                    ->incrementEach([
+                        'input_tokens_used' => $result['usage']['input_tokens'],
+                        'output_tokens_used' => $result['usage']['output_tokens'],
+                        'total_tokens_used' => $result['usage']['total_tokens'],
+                    ]);
+
                 return [$conversation, $userMessage, $assistantMessage];
             });
 
-            unset($result['images']);
+            $user->refresh();
+            unset($result['images'], $result['usage'], $result['citations'], $result['estimated_cost_micros']);
 
             return response()->json([
                 ...$result,
@@ -97,6 +139,13 @@ class ChatController extends Controller
                     'title' => $conversation->title,
                     'model' => $conversation->model,
                     'updated_at' => $conversation->updated_at?->toISOString(),
+                ],
+                'usage' => [
+                    'input' => $user->input_tokens_used,
+                    'output' => $user->output_tokens_used,
+                    'used' => $user->total_tokens_used,
+                    'limit' => $user->token_limit,
+                    'remaining' => $user->remainingTokens(),
                 ],
             ]);
         } catch (RequestException $exception) {

@@ -1,13 +1,45 @@
+const themeButtons = document.querySelectorAll('[data-theme-toggle]');
+
+function updateThemeButtons(isDark) {
+    themeButtons.forEach((button) => {
+        button.setAttribute('aria-label', isDark ? 'فعال‌کردن حالت روشن' : 'فعال‌کردن حالت تاریک');
+        button.setAttribute('title', isDark ? 'حالت روشن' : 'حالت تاریک');
+    });
+}
+
+function setTheme(isDark) {
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+
+    try {
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    } catch (_) {}
+
+    updateThemeButtons(isDark);
+}
+
+try {
+    const savedTheme = localStorage.getItem('theme');
+    const isDark = savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+} catch (_) {}
+
+updateThemeButtons(document.documentElement.classList.contains('dark'));
+themeButtons.forEach((button) => {
+    button.addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
+});
+document.querySelector('[data-print-page]')?.addEventListener('click', () => window.print());
+
 const chat = document.querySelector('[data-chat]');
 
 if (chat) {
-    const form = chat.querySelector('form');
+    const form = chat.querySelector('[data-chat-form]');
     const input = chat.querySelector('textarea');
     const messages = chat.querySelector('[data-messages]');
     const emptyState = chat.querySelector('[data-empty]');
     const submitButton = chat.querySelector('[data-submit]');
     const newChatButtons = chat.querySelectorAll('[data-new-chat]');
-    const themeButtons = chat.querySelectorAll('[data-theme-toggle]');
     const modelSelect = chat.querySelector('[data-model]');
     const fileInput = chat.querySelector('[data-files]');
     const filePreview = chat.querySelector('[data-file-preview]');
@@ -18,31 +50,55 @@ if (chat) {
     const currentTitle = chat.querySelector('[data-current-title]');
     const sidebar = chat.querySelector('[data-sidebar]');
     const sidebarBackdrop = chat.querySelector('[data-sidebar-backdrop]');
+    const usagePanel = chat.querySelector('[data-usage]');
+    const conversationActions = chat.querySelector('[data-conversation-actions]');
+    const settingsDialog = document.querySelector('[data-conversation-dialog]');
+    const settingsForm = settingsDialog?.querySelector('[data-conversation-settings-form]');
+    const stopButton = chat.querySelector('[data-stop]');
+    const voiceButton = chat.querySelector('[data-voice-input]');
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const chatUrl = chat.dataset.chatUrl;
     const conversationUrl = chat.dataset.conversationUrl;
-    let currentConversationId = null;
+    const managementUrls = {
+        update: chat.dataset.conversationUpdateUrl,
+        pin: chat.dataset.conversationPinUrl,
+        archive: chat.dataset.conversationArchiveUrl,
+        share: chat.dataset.conversationShareUrl,
+        delete: chat.dataset.conversationDeleteUrl,
+        export: chat.dataset.conversationExportUrl,
+    };
+    let currentConversationId = chat.dataset.initialConversationId || null;
+    let currentConversation = null;
+    let activeRequest = null;
+    let mediaRecorder = null;
+    let stopRendering = false;
     let selectedFiles = [];
     let generateImage = false;
+    let hasReachedUsageLimit = false;
 
-    function updateThemeButtons(isDark) {
-        themeButtons.forEach((button) => {
-            button.setAttribute('aria-label', isDark ? 'فعال‌کردن حالت روشن' : 'فعال‌کردن حالت تاریک');
-            button.setAttribute('title', isDark ? 'حالت روشن' : 'حالت تاریک');
-        });
+    function updateUsage(usage) {
+        const used = Number(usage.used ?? 0);
+        const limit = usage.limit === null || usage.limit === '' ? null : Number(usage.limit);
+        const numberFormatter = new Intl.NumberFormat('fa-IR');
+        const progressTrack = usagePanel.querySelector('[data-usage-track]');
+
+        usagePanel.querySelector('[data-usage-used]').textContent = numberFormatter.format(used);
+        usagePanel.querySelector('[data-usage-input]').textContent = numberFormatter.format(Number(usage.input ?? 0));
+        usagePanel.querySelector('[data-usage-output]').textContent = numberFormatter.format(Number(usage.output ?? 0));
+        usagePanel.querySelector('[data-usage-limit]').textContent = limit === null ? 'نامحدود' : numberFormatter.format(limit);
+        progressTrack.hidden = limit === null;
+        usagePanel.querySelector('[data-usage-progress]').style.width = limit === null
+            ? '0%'
+            : `${Math.min(100, Math.round((used / limit) * 100))}%`;
+        hasReachedUsageLimit = limit !== null && used >= limit;
     }
 
-    function setTheme(isDark) {
-        document.documentElement.classList.toggle('dark', isDark);
-        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-
-        try {
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        } catch (_) {}
-
-        updateThemeButtons(isDark);
-    }
-
-    updateThemeButtons(document.documentElement.classList.contains('dark'));
+    updateUsage({
+        input: usagePanel.dataset.input,
+        output: usagePanel.dataset.output,
+        used: usagePanel.dataset.used,
+        limit: usagePanel.dataset.limit,
+    });
 
     function appendText(container, text) {
         container.appendChild(document.createTextNode(text));
@@ -350,11 +406,14 @@ if (chat) {
         }
     }
 
-    function addMessage(role, content, attachments = []) {
+    function addMessage(role, content, attachments = [], metadata = {}) {
         const template = document.querySelector(`[data-${role}-template]`);
         const fragment = template.content.cloneNode(true);
         const message = fragment.querySelector('[data-message]');
         const contentContainer = message.querySelector('[data-content]');
+        message.dataset.messageContent = content;
+        message.dataset.messageRole = role;
+        if (metadata.id) message.dataset.messageId = metadata.id;
 
         if (role === 'assistant') {
             renderMarkdown(contentContainer, content);
@@ -380,11 +439,38 @@ if (chat) {
             attachmentContainer.appendChild(attachmentFragment);
         });
 
+        const citationsContainer = message.querySelector('[data-citations]');
+        (metadata.citations ?? []).forEach((citation) => {
+            const link = document.createElement('a');
+            link.href = citation.url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800';
+            link.textContent = citation.title || citation.url;
+            citationsContainer?.appendChild(link);
+        });
+
         messages.appendChild(fragment);
         emptyState.hidden = true;
         messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
 
         return message;
+    }
+
+    async function streamAssistantMessage(messageData) {
+        const message = addMessage('assistant', '', messageData.attachments, messageData);
+        const contentContainer = message.querySelector('[data-content]');
+        const content = messageData.content ?? '';
+        stopRendering = false;
+
+        for (let index = 0; index < content.length && !stopRendering; index += 12) {
+            renderMarkdown(contentContainer, content.slice(0, index + 12));
+            messages.scrollTop = messages.scrollHeight;
+            await new Promise((resolve) => window.setTimeout(resolve, 12));
+        }
+
+        if (!stopRendering) renderMarkdown(contentContainer, content);
+        message.dataset.messageContent = content;
     }
 
     function clearMessages() {
@@ -393,14 +479,18 @@ if (chat) {
     }
 
     function setLoading(isLoading) {
-        input.disabled = isLoading;
-        submitButton.disabled = isLoading;
-        modelSelect.disabled = isLoading;
-        fileInput.disabled = isLoading;
-        imageModeButton.disabled = isLoading;
+        const isDisabled = isLoading || hasReachedUsageLimit;
+        input.disabled = isDisabled;
+        submitButton.disabled = isDisabled;
+        modelSelect.disabled = isDisabled;
+        fileInput.disabled = isDisabled;
+        imageModeButton.disabled = isDisabled;
         submitButton.querySelector('[data-send-label]').hidden = isLoading;
         submitButton.querySelector('[data-loading-label]').hidden = !isLoading;
+        if (stopButton) stopButton.hidden = !isLoading;
     }
+
+    setLoading(false);
 
     function showError(message) {
         errorBox.textContent = message;
@@ -449,6 +539,16 @@ if (chat) {
         });
     }
 
+    function conversationPageUrl(conversationId = null) {
+        const url = new URL(chatUrl, window.location.origin);
+
+        if (conversationId) {
+            url.searchParams.set('conversation', conversationId);
+        }
+
+        return url.toString();
+    }
+
     function upsertHistoryItem(conversation) {
         let item = history.querySelector(`[data-conversation-id="${conversation.id}"]`);
 
@@ -456,6 +556,7 @@ if (chat) {
             const fragment = document.querySelector('[data-conversation-template]').content.cloneNode(true);
             item = fragment.querySelector('[data-conversation-item]');
             item.dataset.conversationId = conversation.id;
+            item.href = conversationPageUrl(conversation.id);
             history.prepend(fragment);
         } else {
             history.prepend(item);
@@ -466,7 +567,39 @@ if (chat) {
         selectHistoryItem(conversation.id);
     }
 
-    async function loadConversation(conversationId) {
+    function managementUrl(type, extra = null) {
+        let url = managementUrls[type].replace('__CONVERSATION__', currentConversationId);
+        if (extra !== null) url = url.replace('__FORMAT__', extra);
+        return url;
+    }
+
+    function updateConversationControls(conversation) {
+        currentConversation = conversation;
+        conversationActions.hidden = !conversation;
+        if (!conversation) return;
+
+        chat.querySelector('[data-conversation-pin]').classList.toggle('text-amber-500', conversation.is_pinned);
+        chat.querySelector('[data-export-markdown]').href = managementUrl('export', 'markdown');
+        chat.querySelector('[data-export-json]').href = managementUrl('export', 'json');
+        chat.querySelector('[data-export-print]').href = managementUrl('export', 'print');
+    }
+
+    async function conversationRequest(type, method = 'POST', body = null) {
+        const response = await fetch(managementUrl(type), {
+            method,
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: body === null ? null : JSON.stringify(body),
+        });
+        const data = response.status === 204 ? {} : await response.json();
+        if (!response.ok) throw new Error(data.message ?? 'انجام عملیات ناموفق بود.');
+        return data;
+    }
+
+    async function loadConversation(conversationId, updateUrl = true) {
         errorBox.hidden = true;
         setLoading(true);
 
@@ -481,11 +614,17 @@ if (chat) {
             }
 
             clearMessages();
-            data.messages.forEach(({ role, content, attachments }) => addMessage(role, content, attachments));
+            data.messages.forEach(({ role, content, attachments, ...metadata }) => addMessage(role, content, attachments, metadata));
             currentConversationId = data.conversation.id;
             currentTitle.textContent = data.conversation.title;
             modelSelect.value = data.conversation.model;
+            updateConversationControls(data.conversation);
             selectHistoryItem(currentConversationId);
+
+            if (updateUrl) {
+                window.history.pushState({ conversationId: currentConversationId }, '', conversationPageUrl(currentConversationId));
+            }
+
             closeSidebar();
         } catch (error) {
             showError(error.message);
@@ -495,14 +634,20 @@ if (chat) {
         }
     }
 
-    function startNewConversation() {
+    function startNewConversation(updateUrl = true) {
         currentConversationId = null;
+        updateConversationControls(null);
         currentTitle.textContent = 'گفت‌وگوی تازه';
         selectHistoryItem(null);
         clearMessages();
         clearSelectedFiles();
         setImageMode(false);
         errorBox.hidden = true;
+
+        if (updateUrl) {
+            window.history.pushState({}, '', conversationPageUrl());
+        }
+
         closeSidebar();
         input.focus();
     }
@@ -519,7 +664,25 @@ if (chat) {
         const item = event.target.closest('[data-conversation-item]');
 
         if (item) {
+            event.preventDefault();
             loadConversation(item.dataset.conversationId);
+        }
+    });
+
+    messages.addEventListener('click', async (event) => {
+        const message = event.target.closest('[data-message]');
+        if (!message) return;
+        if (event.target.closest('[data-copy-message]')) {
+            await navigator.clipboard.writeText(message.dataset.messageContent ?? '');
+        }
+        if (event.target.closest('[data-speak-message]') && 'speechSynthesis' in window) {
+            speechSynthesis.cancel();
+            speechSynthesis.speak(new SpeechSynthesisUtterance(message.dataset.messageContent ?? ''));
+        }
+        if (event.target.closest('[data-resend-message]')) {
+            input.value = message.dataset.messageContent ?? '';
+            resizeInput();
+            input.focus();
         }
     });
 
@@ -575,6 +738,7 @@ if (chat) {
 
             selectedFiles.forEach((file) => formData.append('files[]', file));
 
+            activeRequest = new AbortController();
             const response = await fetch(form.action, {
                 method: 'POST',
                 headers: {
@@ -582,6 +746,7 @@ if (chat) {
                     'X-CSRF-TOKEN': csrfToken,
                 },
                 body: formData,
+                signal: activeRequest.signal,
             });
             const data = await response.json();
 
@@ -593,9 +758,16 @@ if (chat) {
             currentTitle.textContent = data.conversation.title;
             modelSelect.value = data.conversation.model;
             pendingMessage.remove();
-            addMessage(data.user_message.role, data.user_message.content, data.user_message.attachments);
-            addMessage(data.assistant_message.role, data.assistant_message.content, data.assistant_message.attachments);
+            addMessage(data.user_message.role, data.user_message.content, data.user_message.attachments, data.user_message);
+            await streamAssistantMessage(data.assistant_message);
             upsertHistoryItem(data.conversation);
+            window.history.replaceState(
+                { conversationId: currentConversationId },
+                '',
+                conversationPageUrl(currentConversationId),
+            );
+            updateUsage(data.usage);
+            updateConversationControls(data.conversation);
             clearSelectedFiles();
             setImageMode(false);
         } catch (error) {
@@ -607,18 +779,124 @@ if (chat) {
                 emptyState.hidden = false;
             }
 
-            showError(error.message);
+            showError(error.name === 'AbortError' ? 'تولید پاسخ متوقف شد.' : error.message);
         } finally {
             optimisticAttachments.forEach((attachment) => URL.revokeObjectURL(attachment.url));
             setLoading(false);
+            activeRequest = null;
             input.focus();
         }
     });
 
-    newChatButtons.forEach((button) => button.addEventListener('click', startNewConversation));
-    themeButtons.forEach((button) => {
-        button.addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
+    stopButton?.addEventListener('click', () => {
+        stopRendering = true;
+        activeRequest?.abort();
     });
+
+    voiceButton?.addEventListener('click', async () => {
+        if (mediaRecorder?.state === 'recording') {
+            mediaRecorder.stop();
+            return;
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+            showError('ضبط صدا در این مرورگر پشتیبانی نمی‌شود.');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const chunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.addEventListener('dataavailable', (event) => chunks.push(event.data));
+            mediaRecorder.addEventListener('stop', async () => {
+                voiceButton.classList.remove('text-red-500');
+                stream.getTracks().forEach((track) => track.stop());
+                const formData = new FormData();
+                formData.append('audio', new Blob(chunks, { type: mediaRecorder.mimeType }), 'recording.webm');
+                try {
+                    const response = await fetch(chat.dataset.speechUrl, {
+                        method: 'POST',
+                        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: formData,
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.message ?? 'تبدیل صوت ناموفق بود.');
+                    input.value = [input.value, data.text].filter(Boolean).join(' ');
+                    resizeInput();
+                } catch (error) { showError(error.message); }
+            });
+            mediaRecorder.start();
+            voiceButton.classList.add('text-red-500');
+        } catch (_) {
+            showError('دسترسی به میکروفون داده نشد.');
+        }
+    });
+
+    chat.querySelector('[data-conversation-settings]')?.addEventListener('click', () => {
+        settingsDialog.querySelector('[data-settings-title]').value = currentConversation.title ?? '';
+        settingsDialog.querySelector('[data-settings-folder]').value = currentConversation.folder_id ?? '';
+        settingsDialog.querySelector('[data-settings-prompt]').value = currentConversation.system_prompt ?? '';
+        settingsDialog.querySelector('[data-settings-reasoning]').value = currentConversation.reasoning_effort ?? 'none';
+        settingsDialog.querySelector('[data-settings-temperature]').value = currentConversation.temperature ?? '';
+        settingsDialog.querySelector('[data-settings-web]').checked = Boolean(currentConversation.web_search);
+        settingsDialog.querySelector('[data-settings-knowledge]').checked = Boolean(currentConversation.use_knowledge);
+        settingsDialog.showModal();
+    });
+
+    settingsDialog?.querySelector('[data-settings-close]')?.addEventListener('click', () => settingsDialog.close());
+    settingsDialog?.querySelector('[data-settings-save]')?.addEventListener('click', async () => {
+        try {
+            const data = await conversationRequest('update', 'PATCH', {
+                title: settingsDialog.querySelector('[data-settings-title]').value,
+                folder_id: settingsDialog.querySelector('[data-settings-folder]').value || null,
+                system_prompt: settingsDialog.querySelector('[data-settings-prompt]').value || null,
+                reasoning_effort: settingsDialog.querySelector('[data-settings-reasoning]').value,
+                temperature: settingsDialog.querySelector('[data-settings-temperature]').value || null,
+                web_search: settingsDialog.querySelector('[data-settings-web]').checked,
+                use_knowledge: settingsDialog.querySelector('[data-settings-knowledge]').checked,
+            });
+            updateConversationControls({ ...currentConversation, ...data.conversation });
+            currentTitle.textContent = data.conversation.title;
+            upsertHistoryItem(data.conversation);
+            settingsDialog.close();
+        } catch (error) { showError(error.message); }
+    });
+
+    chat.querySelector('[data-conversation-pin]')?.addEventListener('click', async () => {
+        try {
+            const data = await conversationRequest('pin');
+            updateConversationControls({ ...currentConversation, ...data.conversation });
+            upsertHistoryItem(data.conversation);
+        } catch (error) { showError(error.message); }
+    });
+
+    chat.querySelector('[data-conversation-archive]')?.addEventListener('click', async () => {
+        try {
+            await conversationRequest('archive');
+            history.querySelector(`[data-conversation-id="${currentConversationId}"]`)?.remove();
+            startNewConversation();
+        } catch (error) { showError(error.message); }
+    });
+
+    chat.querySelector('[data-conversation-share]')?.addEventListener('click', async () => {
+        try {
+            const data = await conversationRequest('share');
+            await navigator.clipboard.writeText(data.url);
+            showError('لینک عمومی گفتگو در کلیپ‌بورد کپی شد.');
+        } catch (error) { showError(error.message); }
+    });
+
+    chat.querySelector('[data-conversation-delete]')?.addEventListener('click', async () => {
+        if (!window.confirm('این گفتگو برای همیشه حذف شود؟')) return;
+        try {
+            await conversationRequest('delete', 'DELETE');
+            history.querySelector(`[data-conversation-id="${currentConversationId}"]`)?.remove();
+            startNewConversation();
+        } catch (error) { showError(error.message); }
+    });
+
+    newChatButtons.forEach((button) => button.addEventListener('click', () => startNewConversation()));
     chat.querySelector('[data-sidebar-open]').addEventListener('click', () => {
         sidebar.classList.remove('translate-x-full');
         sidebarBackdrop.hidden = false;
@@ -633,4 +911,18 @@ if (chat) {
             modelSelect.value = savedModel;
         }
     } catch (_) {}
+
+    window.addEventListener('popstate', () => {
+        const conversationId = new URL(window.location.href).searchParams.get('conversation');
+
+        if (conversationId) {
+            loadConversation(conversationId, false);
+        } else {
+            startNewConversation(false);
+        }
+    });
+
+    if (currentConversationId) {
+        loadConversation(currentConversationId, false);
+    }
 }

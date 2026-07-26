@@ -19,6 +19,12 @@ class ChatMessage extends Model
         'role',
         'content',
         'attachments',
+        'input_tokens',
+        'output_tokens',
+        'total_tokens',
+        'openai_response_id',
+        'citations',
+        'estimated_cost_micros',
     ];
 
     /**
@@ -28,11 +34,16 @@ class ChatMessage extends Model
     {
         return [
             'attachments' => 'array',
+            'input_tokens' => 'integer',
+            'output_tokens' => 'integer',
+            'total_tokens' => 'integer',
+            'citations' => 'array',
+            'estimated_cost_micros' => 'integer',
         ];
     }
 
     /**
-     * @return array{role: string, content: string, attachments: list<array<string, mixed>>}
+     * @return array{id: int, role: string, content: string, attachments: list<array<string, mixed>>, citations: list<array<string, mixed>>, estimated_cost_micros: int}
      */
     public function toChatArray(): array
     {
@@ -53,9 +64,12 @@ class ChatMessage extends Model
             ->all();
 
         return [
+            'id' => $this->id,
             'role' => $this->role,
             'content' => $this->content,
             'attachments' => $attachments,
+            'citations' => $this->citations ?? [],
+            'estimated_cost_micros' => $this->estimated_cost_micros,
         ];
     }
 

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\ChatMessage;
 use App\Models\Conversation;
-use App\Services\ChatOwner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -19,9 +18,8 @@ class ChatAttachmentController extends Controller
         Conversation $conversation,
         ChatMessage $chatMessage,
         int $attachment,
-        ChatOwner $chatOwner,
     ): StreamedResponse {
-        abort_unless($conversation->owner_token === $chatOwner->token($request), 404);
+        abort_unless($conversation->user_id === $request->user()?->id, 404);
         abort_unless($chatMessage->conversation_id === $conversation->id, 404);
 
         $metadata = ($chatMessage->attachments ?? [])[$attachment] ?? null;
