@@ -1,0 +1,23 @@
+{
+    email {$ACME_EMAIL:admin@cloudinum.ir}
+    frankenphp
+}
+
+{$SERVER_NAME:chat.cloudinum.ir} {
+    root * /app/public
+    encode zstd br gzip
+
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    php_server
+
+    log {
+        output stdout
+        format console
+    }
+}

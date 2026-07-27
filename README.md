@@ -197,6 +197,30 @@ vendor/bin/pint --dirty --format agent
 npm run build
 ```
 
+## استقرار با Docker
+
+رکورد `A` دامنه `chat.cloudinum.ir` را به IP سرور متصل و پورت‌های `80` و `443` را باز کنید. سپس `.env` را با `APP_KEY` و `OPENAI_API_KEY` واقعی روی سرور قرار دهید و اجرا کنید:
+
+```bash
+ACME_EMAIL=admin@cloudinum.ir docker compose up -d --build
+```
+
+FrankenPHP و Caddy گواهی HTTPS را خودکار دریافت می‌کنند. migrationها هنگام شروع container اجرا می‌شوند و دیتابیس SQLite، فایل‌های کاربران و گواهی‌ها در volumeهای دائمی نگه‌داری می‌شوند.
+
+برای مشاهده وضعیت و لاگ‌ها:
+
+```bash
+docker compose ps
+docker compose logs -f app
+```
+
+برای انتشار نسخه جدید:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
 ## امنیت و استقرار
 
 - هرگز فایل `.env` یا مقدار `OPENAI_API_KEY` را commit نکنید.

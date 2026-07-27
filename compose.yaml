@@ -1,0 +1,44 @@
+name: chat-openai-client
+
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    image: chat-openai-client:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: https://chat.cloudinum.ir
+      ASSET_URL: https://chat.cloudinum.ir
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /var/lib/chat/database.sqlite
+      SESSION_SECURE_COOKIE: "true"
+      SERVER_NAME: chat.cloudinum.ir
+      ACME_EMAIL: ${ACME_EMAIL:-admin@cloudinum.ir}
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - app_data:/var/lib/chat
+      - app_storage:/app/storage/app
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error --insecure --resolve chat.cloudinum.ir:443:127.0.0.1 https://chat.cloudinum.ir/up >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  app_data:
+  app_storage:
+  caddy_data:
+  caddy_config:
