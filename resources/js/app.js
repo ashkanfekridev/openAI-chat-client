@@ -45,8 +45,6 @@ if (chat) {
     const filePreview = chat.querySelector('[data-file-preview]');
     const imageModeButton = chat.querySelector('[data-image-mode]');
     const errorBox = chat.querySelector('[data-error]');
-    const history = chat.querySelector('[data-history]');
-    const historyEmpty = chat.querySelector('[data-history-empty]');
     const currentTitle = chat.querySelector('[data-current-title]');
     const sidebar = chat.querySelector('[data-sidebar]');
     const sidebarBackdrop = chat.querySelector('[data-sidebar-backdrop]');
@@ -564,7 +562,7 @@ if (chat) {
     }
 
     function selectHistoryItem(conversationId) {
-        history.querySelectorAll('[data-conversation-item]').forEach((item) => {
+        chat.querySelectorAll('[data-history] [data-conversation-item]').forEach((item) => {
             item.setAttribute('aria-current', item.dataset.conversationId === conversationId ? 'true' : 'false');
         });
     }
@@ -580,6 +578,7 @@ if (chat) {
     }
 
     function upsertHistoryItem(conversation) {
+        const history = chat.querySelector('[data-history]');
         let item = history.querySelector(`[data-conversation-id="${conversation.id}"]`);
 
         if (!item) {
@@ -593,7 +592,7 @@ if (chat) {
         }
 
         item.querySelector('[data-history-title]').textContent = conversation.title;
-        historyEmpty.hidden = true;
+        chat.querySelector('[data-history-empty]').hidden = true;
         selectHistoryItem(conversation.id);
     }
 
@@ -690,10 +689,10 @@ if (chat) {
         }
     });
 
-    history.addEventListener('click', (event) => {
+    chat.addEventListener('click', (event) => {
         const item = event.target.closest('[data-conversation-item]');
 
-        if (item) {
+        if (item?.closest('[data-history]')) {
             event.preventDefault();
             loadConversation(item.dataset.conversationId);
         }
@@ -906,7 +905,7 @@ if (chat) {
     chat.querySelector('[data-conversation-archive]')?.addEventListener('click', async () => {
         try {
             await conversationRequest('archive');
-            history.querySelector(`[data-conversation-id="${currentConversationId}"]`)?.remove();
+            chat.querySelector(`[data-history] [data-conversation-id="${currentConversationId}"]`)?.remove();
             startNewConversation();
         } catch (error) { showError(error.message); }
     });
@@ -923,7 +922,7 @@ if (chat) {
         if (!window.confirm('این گفتگو برای همیشه حذف شود؟')) return;
         try {
             await conversationRequest('delete', 'DELETE');
-            history.querySelector(`[data-conversation-id="${currentConversationId}"]`)?.remove();
+            chat.querySelector(`[data-history] [data-conversation-id="${currentConversationId}"]`)?.remove();
             startNewConversation();
         } catch (error) { showError(error.message); }
     });

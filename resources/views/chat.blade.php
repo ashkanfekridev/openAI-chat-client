@@ -8,6 +8,7 @@
         <title>گپ — دستیار هوشمند</title>
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @livewireStyles
     </head>
     <body class="min-h-screen bg-[#f7f7f5] text-zinc-900 antialiased transition-colors dark:bg-zinc-950 dark:text-zinc-100">
         <div
@@ -53,63 +54,7 @@
                     گفت‌وگوی تازه
                 </button>
 
-                <p class="mb-2 px-2 text-[11px] font-semibold text-zinc-400 dark:text-zinc-500">گفتگوهای شما</p>
-                <form method="GET" action="{{ route('chat') }}" class="mb-2 flex gap-1.5">
-                    <input name="q" type="search" value="{{ request('q') }}" placeholder="جستجو در گفتگوها..." class="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900">
-                    <button type="submit" class="grid size-8.5 place-items-center rounded-lg bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" aria-label="جستجو">⌕</button>
-                </form>
-                <div class="mb-2 flex gap-1 overflow-x-auto pb-1 text-[10px]">
-                    <a href="{{ route('chat') }}" class="shrink-0 rounded-full bg-zinc-200 px-2.5 py-1 dark:bg-zinc-800">همه</a>
-                    @foreach ($folders as $folder)
-                        <a href="{{ route('chat', ['folder' => $folder->id]) }}" class="shrink-0 rounded-full border border-zinc-200 px-2.5 py-1 dark:border-zinc-800">{{ $folder->name }}</a>
-                    @endforeach
-                    <a href="{{ route('chat', ['archived' => 1]) }}" class="shrink-0 rounded-full border border-zinc-200 px-2.5 py-1 dark:border-zinc-800">آرشیو</a>
-                </div>
-                <form method="POST" action="{{ route('folders.store') }}" class="mb-2 flex gap-1.5">
-                    @csrf
-                    <input name="name" maxlength="80" placeholder="پوشه جدید..." class="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] outline-none dark:border-zinc-800 dark:bg-zinc-900">
-                    <button class="rounded-lg border border-zinc-200 px-2.5 text-xs dark:border-zinc-800" aria-label="ساخت پوشه">+</button>
-                </form>
-                @if ($folders->isNotEmpty())
-                    <details class="mb-2 rounded-lg border border-zinc-200 p-2 text-[11px] dark:border-zinc-800">
-                        <summary class="cursor-pointer text-zinc-500">مدیریت پوشه‌ها</summary>
-                        <div class="mt-2 grid gap-2">
-                            @foreach ($folders as $folder)
-                                <div class="flex gap-1">
-                                    <form method="POST" action="{{ route('folders.update', $folder) }}" class="flex min-w-0 flex-1 gap-1">@csrf @method('PATCH')<input name="name" value="{{ $folder->name }}" class="min-w-0 flex-1 rounded border border-zinc-200 bg-transparent px-2 dark:border-zinc-700"><button class="px-1">ذخیره</button></form>
-                                    <form method="POST" action="{{ route('folders.destroy', $folder) }}">@csrf @method('DELETE')<button class="px-1 text-red-500">حذف</button></form>
-                                </div>
-                            @endforeach
-                        </div>
-                    </details>
-                @endif
-                <nav data-history class="flex-1 space-y-1 overflow-y-auto" aria-label="تاریخچه گفتگوها">
-                    @foreach ($conversations as $conversation)
-                        <a
-                            data-conversation-item
-                            data-conversation-id="{{ $conversation->id }}"
-                            href="{{ route('chat', ['conversation' => $conversation->id]) }}"
-                            @if ($initialConversationId === $conversation->id) aria-current="true" @endif
-                            class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right transition hover:bg-white dark:hover:bg-zinc-900"
-                        >
-                            <svg class="size-4 shrink-0 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                                <path d="M8.5 18.5 4 20l1.5-4.5A7.5 7.5 0 1 1 8.5 18.5Z" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            <span class="min-w-0 flex-1">
-                                <span data-history-title class="block truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{{ $conversation->title }}</span>
-                                <span class="mt-0.5 flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                                    @if ($conversation->is_pinned)<span title="سنجاق‌شده">●</span>@endif
-                                    @if ($conversation->folder)<span>{{ $conversation->folder->name }}</span>@endif
-                                    <time>{{ $conversation->updated_at->format('Y/m/d') }}</time>
-                                </span>
-                            </span>
-                        </a>
-                    @endforeach
-                </nav>
-
-                <div data-history-empty @if ($conversations->isNotEmpty()) hidden @endif class="px-3 py-8 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
-                    هنوز گفتگویی ذخیره نشده است.
-                </div>
+                <livewire:conversation-sidebar :$initialConversationId />
 
                 <div
                     data-usage
@@ -337,5 +282,6 @@
                 <button data-remove-file type="button" class="shrink-0 text-zinc-400 hover:text-red-500" aria-label="حذف فایل">×</button>
             </span>
         </template>
+        @livewireScripts
     </body>
 </html>
