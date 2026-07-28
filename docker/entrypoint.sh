@@ -22,8 +22,16 @@ mkdir -p \
 
 if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
     database_path="${DB_DATABASE:-/var/lib/chat/database.sqlite}"
-    mkdir -p "$(dirname "$database_path")"
+    database_directory="$(dirname "$database_path")"
+    mkdir -p "$database_directory"
     touch "$database_path"
+
+    chmod 775 "$database_directory"
+    chmod 664 "$database_path"
+
+    if [ "$(id -u)" = "0" ] && id www-data >/dev/null 2>&1; then
+        chown www-data:www-data "$database_directory" "$database_path"
+    fi
 fi
 
 php artisan optimize

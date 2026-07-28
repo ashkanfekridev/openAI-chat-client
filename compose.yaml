@@ -27,7 +27,7 @@ services:
       - "443:443/udp"
     volumes:
       - app_data:/var/lib/chat
-      - app_storage:/app/storage/app
+      - app_storage:/var/www/html/storage/app
       - caddy_data:/data
       - caddy_config:/config
     healthcheck:
