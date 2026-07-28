@@ -31,6 +31,11 @@ if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
 
     if [ "$(id -u)" = "0" ] && id www-data >/dev/null 2>&1; then
         chown www-data:www-data "$database_directory" "$database_path"
+
+        find "$database_directory" -maxdepth 1 -type f \
+            \( -name "$(basename "$database_path")-wal" -o -name "$(basename "$database_path")-shm" \) \
+            -exec chown www-data:www-data {} \; \
+            -exec chmod 664 {} \;
     fi
 fi
 
