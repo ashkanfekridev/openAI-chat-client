@@ -267,16 +267,17 @@ if (chat) {
                 }
 
                 index += index < lines.length ? 1 : 0;
-                const pre = document.createElement('pre');
-                const code = document.createElement('code');
+                const fragment = document.querySelector('[data-code-block-template]').content.cloneNode(true);
+                const codeBlock = fragment.querySelector('[data-code-block]');
+                const code = codeBlock.querySelector('code');
                 code.textContent = codeLines.join('\n');
 
                 if (fenceMatch[2]) {
                     code.dataset.language = fenceMatch[2];
+                    codeBlock.querySelector('[data-code-language]').textContent = fenceMatch[2];
                 }
 
-                pre.appendChild(code);
-                container.appendChild(pre);
+                container.appendChild(fragment);
                 continue;
             }
 
@@ -701,6 +702,24 @@ if (chat) {
     messages.addEventListener('click', async (event) => {
         const message = event.target.closest('[data-message]');
         if (!message) return;
+        const copyCodeButton = event.target.closest('[data-copy-code]');
+        if (copyCodeButton) {
+            const code = copyCodeButton.closest('[data-code-block]')?.querySelector('code')?.textContent ?? '';
+
+            try {
+                await navigator.clipboard.writeText(code);
+                copyCodeButton.textContent = 'کپی شد';
+                copyCodeButton.disabled = true;
+                window.setTimeout(() => {
+                    copyCodeButton.textContent = 'کپی کد';
+                    copyCodeButton.disabled = false;
+                }, 1600);
+            } catch (_) {
+                showError('کپی‌کردن کد ناموفق بود.');
+            }
+
+            return;
+        }
         if (event.target.closest('[data-copy-message]')) {
             await navigator.clipboard.writeText(message.dataset.messageContent ?? '');
         }

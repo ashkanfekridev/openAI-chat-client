@@ -26,6 +26,8 @@ test('the chat page displays only the authenticated user history', function () {
         ->assertOk()
         ->assertSee('data-theme-toggle', false)
         ->assertSee('data-chat-form', false)
+        ->assertSee('data-copy-code', false)
+        ->assertSee('کپی کد')
         ->assertSee('method="POST" action="'.route('chat.send').'"', false)
         ->assertSee('GPT-5.6 Terra')
         ->assertSee($visibleConversation->title)

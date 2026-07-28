@@ -134,6 +134,12 @@ textarea {
     text-align: left;
 }
 
+.markdown-content .markdown-code-block pre {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+}
+
 .markdown-content pre code {
     display: block;
     min-width: max-content;

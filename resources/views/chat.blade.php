@@ -263,6 +263,16 @@
             </article>
         </template>
 
+        <template data-code-block-template>
+            <div data-code-block class="markdown-code-block overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950" dir="ltr">
+                <div class="flex items-center justify-between gap-3 border-b border-zinc-700 px-3 py-2 text-[11px] text-zinc-400">
+                    <span data-code-language>کد</span>
+                    <button data-copy-code type="button" class="rounded-lg border border-zinc-600 bg-zinc-800 px-2.5 py-1 font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-700 disabled:cursor-default disabled:text-emerald-400">کپی کد</button>
+                </div>
+                <pre><code></code></pre>
+            </div>
+        </template>
+
         <template data-image-attachment-template>
             <a data-attachment-link target="_blank" rel="noopener" class="block overflow-hidden rounded-xl border border-zinc-200/70 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
                 <img data-attachment-image class="max-h-80 w-auto max-w-full object-contain" alt="تصویر پیوست">
