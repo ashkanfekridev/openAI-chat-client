@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\OpenAIConfigurationException;
+use App\Exceptions\OpenAIResponseException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -74,22 +75,22 @@ class OpenAIClient
             ->throw()
             ->json();
 
-        $responseText = collect($response['output'] ?? [])
-            ->where('type', 'message')
-            ->flatMap(fn (array $output): array => $output['content'] ?? [])
-            ->where('type', 'output_text')
-            ->pluck('text')
-            ->filter()
-            ->implode("\n");
+        if (! is_array($response)) {
+            throw new OpenAIResponseException([]);
+        }
 
-        $images = collect($response['output'] ?? [])
+        $output = collect(is_array($response['output'] ?? null) ? $response['output'] : [])
+            ->filter(fn (mixed $item): bool => is_array($item));
+        $responseText = $this->responseText($response);
+
+        $images = $output
             ->where('type', 'image_generation_call')
             ->pluck('result')
             ->filter(fn (mixed $image): bool => is_string($image) && $image !== '')
             ->values()
             ->all();
 
-        $citations = collect($response['output'] ?? [])
+        $citations = $output
             ->where('type', 'message')
             ->flatMap(fn (array $output): array => $output['content'] ?? [])
             ->flatMap(fn (array $content): array => $content['annotations'] ?? [])
@@ -104,7 +105,7 @@ class OpenAIClient
             ->all();
 
         if (! is_string($response['id'] ?? null) || ($responseText === '' && $images === [])) {
-            throw new RuntimeException('OpenAI returned an unexpected response.');
+            throw new OpenAIResponseException($response);
         }
 
         $usage = is_array($response['usage'] ?? null) ? $response['usage'] : [];
@@ -250,5 +251,42 @@ class OpenAIClient
             ->retry([200, 500], throw: false);
 
         return $asJson ? $request->asJson() : $request;
+    }
+
+    /** @param array<string, mixed> $response */
+    private function responseText(array $response): string
+    {
+        $output = is_array($response['output'] ?? null) ? $response['output'] : [];
+        $nestedText = collect($output)
+            ->filter(fn (mixed $item): bool => is_array($item) && is_array($item['content'] ?? null))
+            ->flatMap(fn (array $item): array => $item['content'])
+            ->filter(fn (mixed $content): bool => is_array($content))
+            ->map(function (array $content): ?string {
+                $type = $content['type'] ?? null;
+
+                if (in_array($type, ['output_text', 'text'], true) && is_string($content['text'] ?? null)) {
+                    return $content['text'];
+                }
+
+                if ($type === 'refusal' && is_string($content['refusal'] ?? null)) {
+                    return $content['refusal'];
+                }
+
+                return null;
+            })
+            ->filter(fn (mixed $text): bool => is_string($text) && $text !== '')
+            ->implode("\n");
+
+        if ($nestedText !== '') {
+            return $nestedText;
+        }
+
+        if (is_string($response['output_text'] ?? null) && $response['output_text'] !== '') {
+            return $response['output_text'];
+        }
+
+        $compatibleContent = data_get($response, 'choices.0.message.content');
+
+        return is_string($compatibleContent) ? $compatibleContent : '';
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\OpenAIConfigurationException;
+use App\Exceptions\OpenAIResponseException;
 use App\Http\Requests\SendChatMessageRequest;
 use App\Models\Conversation;
 use App\Models\User;
@@ -169,10 +170,16 @@ class ChatController extends Controller
             return response()->json([
                 'message' => 'کلید OpenAI روی سرور تنظیم نشده است. متغیر OPENAI_API_KEY را در تنظیمات سرویس ثبت کنید.',
             ], 503);
+        } catch (OpenAIResponseException $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'پاسخ OpenAI دریافت شد اما قابل پردازش نبود. جزئیات امن در لاگ سرور ثبت شد.',
+            ], 502);
         } catch (RuntimeException $exception) {
             report($exception);
 
-            return response()->json(['message' => 'سرویس چت به‌درستی پیکربندی نشده است.'], 500);
+            return response()->json(['message' => 'پردازش یا ذخیره‌سازی پاسخ چت ناموفق بود.'], 500);
         } catch (Throwable $exception) {
             report($exception);
 

@@ -164,6 +164,76 @@ test('a missing openai api key returns a clear configuration error', function ()
     Http::assertNothingSent();
 });
 
+test('a top-level output text response is accepted', function () {
+    Http::fake([
+        'api.openai.com/v1/responses' => Http::response([
+            'id' => 'resp_top_level',
+            'model' => 'gpt-5.6-sol',
+            'output_text' => 'پاسخ مستقیم',
+        ]),
+    ]);
+
+    $this->postJson(route('chat.send'), chatPayload())
+        ->assertOk()
+        ->assertJsonPath('message', 'پاسخ مستقیم');
+});
+
+test('an openai refusal response is accepted', function () {
+    Http::fake([
+        'api.openai.com/v1/responses' => Http::response([
+            'id' => 'resp_refusal',
+            'model' => 'gpt-5.6-sol',
+            'output' => [[
+                'type' => 'message',
+                'content' => [[
+                    'type' => 'refusal',
+                    'refusal' => 'نمی‌توانم در این مورد کمک کنم.',
+                ]],
+            ]],
+        ]),
+    ]);
+
+    $this->postJson(route('chat.send'), chatPayload())
+        ->assertOk()
+        ->assertJsonPath('message', 'نمی‌توانم در این مورد کمک کنم.');
+});
+
+test('an openai-compatible chat completion response is accepted', function () {
+    Http::fake([
+        'api.openai.com/v1/responses' => Http::response([
+            'id' => 'chatcmpl_123',
+            'model' => 'compatible-model',
+            'choices' => [[
+                'message' => ['content' => 'پاسخ سرویس سازگار'],
+            ]],
+        ]),
+    ]);
+
+    $this->postJson(route('chat.send'), chatPayload())
+        ->assertOk()
+        ->assertJsonPath('message', 'پاسخ سرویس سازگار');
+});
+
+test('an unknown successful openai response returns a distinct safe error', function () {
+    Http::fake([
+        'api.openai.com/v1/responses' => Http::response([
+            'id' => 'resp_unknown',
+            'model' => 'gpt-5.6-sol',
+            'status' => 'completed',
+            'output' => [['type' => 'unknown']],
+        ]),
+    ]);
+
+    $this->postJson(route('chat.send'), chatPayload())
+        ->assertStatus(502)
+        ->assertJsonPath(
+            'message',
+            'پاسخ OpenAI دریافت شد اما قابل پردازش نبود. جزئیات امن در لاگ سرور ثبت شد.',
+        );
+
+    expect(ChatMessage::query()->count())->toBe(0);
+});
+
 test('an uploaded image is sent to the model and saved with the message', function () {
     Storage::fake('local');
     Http::fake([
