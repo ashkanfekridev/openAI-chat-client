@@ -2,6 +2,16 @@
 
 set -eu
 
+if [ -z "${APP_KEY:-}" ]; then
+    echo "ERROR: APP_KEY is not configured in the service environment." >&2
+    exit 1
+fi
+
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+    echo "ERROR: OPENAI_API_KEY is not configured in the service environment." >&2
+    exit 1
+fi
+
 mkdir -p \
     storage/framework/cache/data \
     storage/framework/sessions \

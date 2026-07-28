@@ -150,6 +150,20 @@ test('an openai failure returns a safe error without saving messages', function 
     expect(ChatMessage::query()->count())->toBe(0);
 });
 
+test('a missing openai api key returns a clear configuration error', function () {
+    config()->set('services.openai.api_key');
+    Http::preventStrayRequests();
+
+    $this->postJson(route('chat.send'), chatPayload(['message' => 'سلام']))
+        ->assertServiceUnavailable()
+        ->assertJsonPath(
+            'message',
+            'کلید OpenAI روی سرور تنظیم نشده است. متغیر OPENAI_API_KEY را در تنظیمات سرویس ثبت کنید.',
+        );
+
+    Http::assertNothingSent();
+});
+
 test('an uploaded image is sent to the model and saved with the message', function () {
     Storage::fake('local');
     Http::fake([

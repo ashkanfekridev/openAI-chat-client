@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\OpenAIConfigurationException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -238,7 +239,7 @@ class OpenAIClient
         $apiKey = $this->apiKey ?? config('services.openai.api_key');
 
         if (! is_string($apiKey) || $apiKey === '') {
-            throw new RuntimeException('The OpenAI API key is not configured.');
+            throw new OpenAIConfigurationException('The OPENAI_API_KEY environment variable is not configured.');
         }
 
         $request = Http::baseUrl((string) config('services.openai.base_url'))
