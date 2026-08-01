@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>رابط و امنیت — گپ</title>
+    <link rel="stylesheet" href="/docs/assets/styles.css">
+<body>
+<header class="site-header"><nav class="nav" aria-label="ناوبری اصلی"><a class="brand" href="/docs/">مستندات گپ</a><a href="/docs/">خانه</a><a href="/docs/architecture.html">معماری</a><a href="/docs/data-model.html">مدل داده</a><a href="/docs/request-flows.html">جریان‌ها</a><a href="/docs/frontend-security.html" aria-current="page">رابط و امنیت</a><a href="/docs/operations.html">اجرا و نگهداری</a></nav></header>
+<main class="container">
+<section class="hero"><span class="eyebrow">بخش چهارم</span><h1>رابط کاربری و امنیت</h1><p class="lead">تقسیم مسئولیت Blade، Livewire و JavaScript و کنترل‌های امنیتی دسترسی و نمایش محتوا.</p></section>
+
+<h2>Blade</h2>
+<p><code>resources/views/chat.blade.php</code> shell اصلی، فرم چت، dialog تنظیمات، template پیام‌ها و URL endpointها را با attributeهای <code>data-*</code> در اختیار JavaScript می‌گذارد. viewهای جدا برای auth، پنل مدیر، اشتراک عمومی و چاپ وجود دارند.</p>
+
+<h2>Livewire Sidebar</h2>
+<p>کامپوننت class-based <code>ConversationSidebar</code> فقط روی داده‌های کاربر فعلی کار می‌کند و این رفتارها را دارد:</p>
+<ul>
+    <li>جستجوی live در عنوان و محتوای پیام با debounce سیصد میلی‌ثانیه</li>
+    <li>فیلتر پوشه و آرشیو در query string</li>
+    <li>مرتب‌سازی گفتگوهای pinشده و سپس آخرین تغییر</li>
+    <li>ساخت، تغییر نام و حذف پوشه با validation و Policy</li>
+</ul>
+
+<h2>JavaScript مرورگر</h2>
+<div class="grid">
+    <div class="card"><h3>چرخه چت</h3><p>fetch، AbortController، رندر تدریجی، history و notification.</p></div>
+    <div class="card"><h3>محتوا</h3><p>فایل، تصویر، Markdown، copy، resend و خواندن صوتی.</p></div>
+    <div class="card"><h3>تنظیمات</h3><p>مدل، system prompt، reasoning، temperature، وب و دانش.</p></div>
+    <div class="card"><h3>ترجیحات</h3><p>ذخیره theme و مدل انتخابی در localStorage.</p></div>
+</div>
+
+<h2>رندر امن Markdown</h2>
+<p>پیام کاربر همیشه متن ساده است. برای پاسخ دستیار، parser داخلی با ساخت مستقیم nodeهای DOM از تیتر، فهرست، نقل‌قول، جدول، لینک و code block پشتیبانی می‌کند. HTML خام مدل به DOM تزریق نمی‌شود و لینک فقط با protocolهای زیر فعال است:</p>
+<pre><code>http:  https:  mailto:</code></pre>
+
+<h2>احراز هویت</h2>
+<ul>
+    <li>User قرارداد <code>MustVerifyEmail</code> را پیاده‌سازی می‌کند.</li>
+    <li>چت نیازمند login، حساب فعال و ایمیل تأییدشده است.</li>
+    <li>password با cast نوع <code>hashed</code> ذخیره می‌شود.</li>
+    <li>session پس از login/register regenerate و هنگام logout invalidate می‌شود.</li>
+    <li>ورود و ثبت‌نام با throttle پنج درخواست در دقیقه محافظت می‌شوند.</li>
+</ul>
+
+<h2>Authorization و فایل خصوصی</h2>
+<div class="table-wrap"><table><thead><tr><th>سطح</th><th>کنترل</th></tr></thead><tbody>
+<tr><td>Route</td><td>middlewareهای guest، auth، active، verified و admin</td></tr>
+<tr><td>ورودی</td><td>Form Request برای validation و authorization</td></tr>
+<tr><td>Resource</td><td>Policy یا شرط مالکیت user_id</td></tr>
+<tr><td>پیوست</td><td>مالکیت گفتگو، تعلق پیام، prefix مسیر و وجود فایل</td></tr>
+<tr><td>عمومی</td><td>share token یکتا به همراه shared_at</td></tr>
+</tbody></table></div>
+<p>دسترسی غیرمجاز به منابع متعلق به کاربر دیگر معمولاً 404 می‌دهد تا وجود resource افشا نشود. فایل‌ها public نیستند و تنها از controller کنترل‌شده قابل دریافت‌اند. پاسخ دانلود نیز header <code>X-Content-Type-Options: nosniff</code> دارد.</p>
+
+<h2>سهمیه و مدیریت</h2>
+<p>قبل از درخواست OpenAI، دوره مصرف refresh و سقف بررسی می‌شود. مدیر می‌تواند نقش، وضعیت، مدل‌های مجاز، سقف و دوره روزانه/ماهانه را تغییر دهد. غیرفعال‌سازی حساب خود مدیر از پنل جلوگیری می‌شود.</p>
+</main><footer class="footer">مستندات داخلی پروژه chat-openai-client</footer></body></html>

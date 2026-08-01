@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مدل داده — گپ</title><link rel="stylesheet" href="/docs/assets/styles.css"></head><body>
+<header class="site-header"><nav class="nav" aria-label="ناوبری اصلی"><a class="brand" href="/docs/">مستندات گپ</a><a href="/docs/">خانه</a><a href="/docs/architecture.html">معماری</a><a href="/docs/data-model.html" aria-current="page">مدل داده</a><a href="/docs/request-flows.html">جریان‌ها</a><a href="/docs/frontend-security.html">رابط و امنیت</a><a href="/docs/operations.html">اجرا و نگهداری</a></nav></header>
+<main class="container">
+<section class="hero"><span class="eyebrow">بخش دوم</span><h1>مدل داده و ذخیره‌سازی</h1><p class="lead">روابط Eloquent، ستون‌های مهم، قواعد حذف و نحوه نگهداری فایل و مصرف.</p></section>
+
+<h2>روابط اصلی</h2>
+<div class="diagram"><div class="node">User</div><span class="arrow">۱ ← چند</span><div class="node">Conversation</div><span class="arrow">۱ ← چند</span><div class="node">ChatMessage</div></div>
+<div class="diagram"><div class="node">User</div><span class="arrow">۱ ← چند</span><div class="node">ConversationFolder</div><span class="arrow">۰/۱ ← چند</span><div class="node">Conversation</div></div>
+<div class="diagram"><div class="node">User</div><span class="arrow">۱ ← چند</span><div class="node">KnowledgeDocument</div><span class="arrow">↔</span><div class="node">OpenAI File / Vector Store</div></div>
+
+<h2>مدل‌ها</h2>
+<div class="table-wrap"><table><thead><tr><th>مدل</th><th>داده‌های کلیدی</th><th>روابط/رفتار</th></tr></thead><tbody>
+<tr><td><code>User</code></td><td>email، role، is_active، allowed_models، token_limit، شمارنده‌ها، vector_store_id</td><td>مالک گفتگو، پوشه و سند؛ محاسبه سهمیه و reset دوره</td></tr>
+<tr><td><code>Conversation</code></td><td>UUID، model، openai_response_id، تنظیمات، share_token</td><td>متعلق به User و Folder؛ شامل چند Message</td></tr>
+<tr><td><code>ChatMessage</code></td><td>role، content، attachments، token usage، citations، estimated cost</td><td>متعلق به Conversation؛ تولید خروجی امن برای UI</td></tr>
+<tr><td><code>ConversationFolder</code></td><td>name، color، user_id</td><td>پوشه شخصی شامل چند گفتگو</td></tr>
+<tr><td><code>KnowledgeDocument</code></td><td>path، mime_type، size، openai_file_id، status، error</td><td>متادیتای فایل محلی و خارجی کاربر</td></tr>
+</tbody></table></div>
+
+<h2>جدول <code>conversations</code></h2>
+<ul>
+    <li><code>id</code> از نوع UUID است.</li>
+    <li><code>openai_response_id</code> زنجیره context را برای درخواست بعدی نگه می‌دارد.</li>
+    <li><code>system_prompt</code>، <code>reasoning_effort</code>، <code>temperature</code>، <code>web_search</code> و <code>use_knowledge</code> برای هر گفتگو مستقل‌اند.</li>
+    <li><code>folder_id</code> اختیاری است؛ pin و archive برای مرتب‌سازی sidebar استفاده می‌شوند.</li>
+    <li><code>share_token</code> یکتا است و همراه <code>shared_at</code> دسترسی عمومی را فعال می‌کند.</li>
+</ul>
+
+<h2>پیام و پیوست</h2>
+<p>هر پاسخ موفق دو رکورد پیام ایجاد می‌کند: یکی با role کاربر و یکی با role دستیار. مصرف توکن، شناسه پاسخ OpenAI، citation و هزینه تقریبی روی پیام دستیار ذخیره می‌شوند.</p>
+<p>آرایه JSON پیوست شامل نام، MIME، نوع و مسیر خصوصی است. متد <code>ChatMessage::toChatArray()</code> کلید <code>path</code> را حذف و URL endpoint کنترل‌شده دانلود را جایگزین می‌کند. فایل‌ها در مسیر زیر قرار می‌گیرند:</p>
+<pre><code>storage/app/private/chat-attachments/{conversation-uuid}/{generated-name}</code></pre>
+
+<h2>قواعد حذف و یکپارچگی</h2>
+<ul>
+    <li>حذف کاربر، رکورد گفتگوها، پوشه‌ها و اسناد وابسته را در دیتابیس cascade می‌کند.</li>
+    <li>حذف پوشه فقط <code>folder_id</code> گفتگو را null می‌کند.</li>
+    <li>حذف گفتگو، پیام‌های دیتابیس و پوشه فایل آن گفتگو را حذف می‌کند.</li>
+    <li>حذف سند از endpoint برنامه، فایل OpenAI و فایل local را نیز پاک می‌کند.</li>
+    <li>Vector Store کاربر پس از حذف آخرین سند به‌صورت خودکار حذف نمی‌شود.</li>
+</ul>
+<div class="warning">حذف مستقیم رکوردها در دیتابیس cleanup منابع storage یا OpenAI را تضمین نمی‌کند؛ عملیات حذف باید از endpointهای برنامه انجام شود.</div>
+
+<h2>مصرف و هزینه</h2>
+<p>جدول کاربران شمارنده‌های input، output و total دوره جاری را نگه می‌دارد. مقدار <code>token_limit=null</code> به معنی مصرف نامحدود است. هزینه تقریبی هر پیام در <code>estimated_cost_micros</code> و بر اساس قیمت مدل در <code>config/services.php</code> محاسبه می‌شود.</p>
+<div class="note">ادامه: <a href="/docs/request-flows.html">جریان ارسال پیام و قابلیت‌های OpenAI</a>.</div>
+</main><footer class="footer">مستندات داخلی پروژه chat-openai-client</footer></body></html>

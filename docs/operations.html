@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اجرا و نگهداری — گپ</title><link rel="stylesheet" href="/docs/assets/styles.css"></head><body>
+<header class="site-header"><nav class="nav" aria-label="ناوبری اصلی"><a class="brand" href="/docs/">مستندات گپ</a><a href="/docs/">خانه</a><a href="/docs/architecture.html">معماری</a><a href="/docs/data-model.html">مدل داده</a><a href="/docs/request-flows.html">جریان‌ها</a><a href="/docs/frontend-security.html">رابط و امنیت</a><a href="/docs/operations.html" aria-current="page">اجرا و نگهداری</a></nav></header>
+<main class="container">
+<section class="hero"><span class="eyebrow">بخش پنجم</span><h1>اجرا، تست و نگهداری</h1><p class="lead">تنظیمات محیط، اجرای توسعه، وضعیت deployment، مدیریت خطا و پوشش تست.</p></section>
+
+<h2>متغیرهای محیطی</h2>
+<div class="table-wrap"><table><thead><tr><th>متغیر</th><th>کاربرد</th></tr></thead><tbody>
+<tr><td><code>APP_KEY</code></td><td>کلید رمزنگاری Laravel؛ الزامی</td></tr>
+<tr><td><code>APP_URL</code></td><td>آدرس canonical برنامه</td></tr>
+<tr><td><code>DB_CONNECTION / DB_DATABASE</code></td><td>اتصال دیتابیس؛ پیش‌فرض SQLite</td></tr>
+<tr><td><code>OPENAI_API_KEY</code></td><td>احراز هویت OpenAI؛ الزامی</td></tr>
+<tr><td><code>OPENAI_MODEL</code></td><td>مدل پیش‌فرض رابط</td></tr>
+<tr><td><code>OPENAI_BASE_URL</code></td><td>endpoint اصلی یا سازگار با OpenAI</td></tr>
+<tr><td><code>OPENAI_TRANSCRIPTION_MODEL</code></td><td>مدل تبدیل گفتار به متن</td></tr>
+</tbody></table></div>
+
+<h2>راه‌اندازی توسعه</h2>
+<pre><code>composer install
+cp .env.example .env
+php artisan key:generate
+npm install
+php artisan migrate
+npm run build
+composer run dev</code></pre>
+<p><code>composer run dev</code> سرور Laravel، queue worker، Pail و Vite را با هم اجرا می‌کند. عملیات OpenAI فعلاً داخل همان درخواست HTTP است و به queue ارسال نمی‌شود.</p>
+
+<h2>مدیریت خطا</h2>
+<div class="table-wrap"><table><thead><tr><th>شرایط</th><th>HTTP</th><th>رفتار</th></tr></thead><tbody>
+<tr><td>سقف کاربر یا rate limit OpenAI</td><td>429</td><td>پیام فارسی قابل اقدام</td></tr>
+<tr><td>اتصال یا پاسخ نامعتبر OpenAI</td><td>502</td><td>جزئیات فقط در log</td></tr>
+<tr><td>نبود API key</td><td>503</td><td>خطای روشن پیکربندی</td></tr>
+<tr><td>ذخیره یا پردازش داخلی</td><td>500</td><td>پیام عمومی امن</td></tr>
+<tr><td>حساب یا مدل غیرمجاز</td><td>403</td><td>توقف پیش از OpenAI</td></tr>
+</tbody></table></div>
+<p>در خطای OpenAI پیام و گفتگو ذخیره نمی‌شوند. exception با <code>report()</code> ثبت می‌شود و body خام سرویس خارجی به کاربر نمایش داده نمی‌شود.</p>
+
+<h2>Docker و Production</h2>
+<p><code>compose.yaml</code> برای SQLite و storage از volume استفاده می‌کند، پورت‌های ۸۰ و ۴۴۳ را منتشر می‌سازد و مسیر <code>/up</code> را health check می‌کند. entrypoint وجود <code>APP_KEY</code> و <code>OPENAI_API_KEY</code> را بررسی، مسیرها را آماده، برنامه را optimize و migrationها را اجرا می‌کند.</p>
+<div class="warning"><strong>محدودیت فعلی:</strong> Compose از build target با نام <code>runtime</code> استفاده می‌کند، اما Dockerfile فعلی چنین stageای ندارد و Caddyfile را هم وارد image نمی‌کند. پیش از deployment باید Dockerfile و Compose هماهنگ شوند.</div>
+
+<h2>تست‌ها</h2>
+<p>مجموعه تست، auth، جداسازی کاربران، گفتگو و OpenAI، فایل و تصویر، سهمیه، RAG، citation، مدیریت گفتگو، Livewire، دانش و پنل مدیر را پوشش می‌دهد. ارتباط خارجی با <code>Http::fake()</code> جایگزین می‌شود.</p>
+<pre><code>php artisan test --compact</code></pre>
+<div class="facts"><div class="fact"><strong>۴۲</strong><span>تست پاس‌شده</span></div><div class="fact"><strong>۱۶۲</strong><span>assertion</span></div><div class="fact"><strong>۰</strong><span>درخواست واقعی OpenAI</span></div><div class="fact"><strong>Pest 4</strong><span>Test runner</span></div></div>
+
+<h2>چک‌لیست نگهداری</h2>
+<ul>
+    <li>مدل‌ها و قیمت‌ها را فقط در <code>config/services.php</code> تغییر دهید و config cache را پاک کنید.</li>
+    <li>دیتابیس و <code>storage/app/private</code> را با هم backup بگیرید.</li>
+    <li>timeout وب‌سرور و proxy را با timeout صدوهشتاد ثانیه‌ای OpenAI هماهنگ کنید.</li>
+    <li>برای cleanup درست، فایل و گفتگو را از endpoint برنامه حذف کنید، نه مستقیماً از دیتابیس.</li>
+    <li>کارهای طولانی و قابل retry مانند پردازش حجیم سند را در آینده به Job و queue منتقل کنید.</li>
+    <li>در production از <code>APP_DEBUG=false</code>، cookie امن و secret store مناسب استفاده کنید.</li>
+</ul>
+</main><footer class="footer">مستندات داخلی پروژه chat-openai-client</footer></body></html>

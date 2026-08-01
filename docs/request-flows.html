@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>جریان‌های اجرایی — گپ</title><link rel="stylesheet" href="/docs/assets/styles.css"></head><body>
+<header class="site-header"><nav class="nav" aria-label="ناوبری اصلی"><a class="brand" href="/docs/">مستندات گپ</a><a href="/docs/">خانه</a><a href="/docs/architecture.html">معماری</a><a href="/docs/data-model.html">مدل داده</a><a href="/docs/request-flows.html" aria-current="page">جریان‌ها</a><a href="/docs/frontend-security.html">رابط و امنیت</a><a href="/docs/operations.html">اجرا و نگهداری</a></nav></header>
+<main class="container">
+<section class="hero"><span class="eyebrow">بخش سوم</span><h1>جریان‌های اجرایی</h1><p class="lead">از تعامل مرورگر تا Responses API و ذخیره نتیجه؛ همراه با تصویر، وب، RAG و صوت.</p></section>
+
+<h2>ارسال پیام</h2>
+<div class="diagram"><div class="node">۱. فرم مرورگر</div><span class="arrow">←</span><div class="node">۲. Validation و سهمیه</div><span class="arrow">←</span><div class="node">۳. OpenAI Responses</div><span class="arrow">←</span><div class="node">۴. DB Transaction</div><span class="arrow">←</span><div class="node">۵. رندر پاسخ</div></div>
+<ol>
+    <li>JavaScript پیام را خوش‌بینانه نمایش می‌دهد و متن، مدل، حالت، شناسه گفتگو و فایل‌ها را با <code>FormData</code> به <code>POST /chat</code> می‌فرستد.</li>
+    <li><code>SendChatMessageRequest</code> ورودی را اعتبارسنجی می‌کند. سپس حساب فعال، دوره سهمیه، مدل مجاز و مالکیت گفتگو بررسی می‌شوند.</li>
+    <li><code>OpenAIClient::respond()</code> payload را می‌سازد. برای ادامه گفتگو، <code>previous_response_id</code> از آخرین پاسخ ذخیره‌شده ارسال می‌شود.</li>
+    <li>پس از موفقیت OpenAI، transaction گفتگو را در صورت نیاز می‌سازد، دو پیام را ثبت، شناسه پاسخ را update و مصرف کاربر را increment می‌کند.</li>
+    <li>JSON امن شامل گفتگو، پیام‌ها و مصرف جدید به مرورگر می‌رسد و history و UI به‌روزرسانی می‌شوند.</li>
+</ol>
+<div class="note">OpenAI streaming واقعی وجود ندارد. سرور پاسخ کامل را می‌گیرد و JavaScript متن نهایی را به شکل تدریجی در DOM نمایش می‌دهد. Abort مرورگر الزاماً پردازش upstream را متوقف نمی‌کند.</div>
+
+<h2>ساخت payload</h2>
+<div class="table-wrap"><table><thead><tr><th>تنظیم</th><th>اثر روی درخواست</th></tr></thead><tbody>
+<tr><td>System prompt</td><td>در فیلد <code>instructions</code> قرار می‌گیرد.</td></tr>
+<tr><td>Reasoning</td><td><code>reasoning.effort</code> را تعیین می‌کند.</td></tr>
+<tr><td>Temperature</td><td>فقط وقتی مقدار داشته باشد افزوده می‌شود.</td></tr>
+<tr><td>Web search</td><td>ابزار <code>web_search</code> اضافه می‌شود.</td></tr>
+<tr><td>Knowledge</td><td>ابزار <code>file_search</code> با Vector Store کاربر اضافه می‌شود.</td></tr>
+<tr><td>Image mode</td><td>ابزار <code>image_generation</code> اجباری می‌شود.</td></tr>
+</tbody></table></div>
+
+<h2>فایل و تصویر</h2>
+<h3>چت معمولی</h3>
+<p>در هر پیام حداکثر پنج فایل پذیرفته می‌شود. تصویر به صورت <code>input_image</code> و سایر فایل‌ها به صورت <code>input_file</code> با data URL ارسال می‌شوند. برای PDF مقدار detail روی <code>low</code> است.</p>
+<h3>تولید تصویر</h3>
+<p>حالت تصویر از <code>gpt-5.6-sol</code>، کیفیت <code>medium</code> و اندازه <code>1024x1024</code> استفاده می‌کند. خروجی base64 به PNG خصوصی تبدیل و به عنوان پیوست پیام دستیار ذخیره می‌شود.</p>
+<h3>جستجوی وب</h3>
+<p>annotationهای <code>url_citation</code> معتبر استخراج، بر اساس URL یکتا و همراه پیام ذخیره می‌شوند.</p>
+
+<h2>دانش اختصاصی (RAG)</h2>
+<div class="diagram"><div class="node">آپلود local</div><span class="arrow">←</span><div class="node">OpenAI Files</div><span class="arrow">←</span><div class="node">Vector Store کاربر</div><span class="arrow">←</span><div class="node">file_search</div></div>
+<ol>
+    <li>سند ابتدا در فضای خصوصی کاربر و با status برابر <code>processing</code> ثبت می‌شود.</li>
+    <li>فایل در OpenAI Files آپلود می‌شود.</li>
+    <li>اگر کاربر Vector Store ندارد، یک مورد ساخته و شناسه آن روی User ذخیره می‌شود.</li>
+    <li>فایل به Vector Store متصل و سند <code>ready</code> می‌شود.</li>
+    <li>وقتی <code>use_knowledge</code> گفتگو فعال باشد، پاسخ بعدی ابزار file search را دریافت می‌کند.</li>
+</ol>
+<p>خطای آپلود خارجی باعث حفظ رکورد با status برابر <code>failed</code> و یک پیام امن می‌شود.</p>
+
+<h2>گفتار</h2>
+<p><code>MediaRecorder</code> صدای مرورگر را به <code>POST /speech/transcribe</code> می‌فرستد و متن برگشتی داخل textarea قرار می‌گیرد. خواندن پاسخ با <code>speechSynthesis</code> خود مرورگر انجام می‌شود.</p>
+
+<h2>مدیریت گفتگو</h2>
+<p>endpointهای جدا برای update تنظیمات، pin، archive، share، unshare، delete و export وجود دارند. export در قالب JSON، Markdown یا صفحه چاپ انجام می‌شود. لینک عمومی با token تصادفی ۴۸ کاراکتری ساخته می‌شود و صفحه مقصد فقط‌خواندنی است.</p>
+</main><footer class="footer">مستندات داخلی پروژه chat-openai-client</footer></body></html>

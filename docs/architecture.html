@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>معماری و ساختار کد — گپ</title><link rel="stylesheet" href="/docs/assets/styles.css">
+</head>
+<body>
+<header class="site-header"><nav class="nav" aria-label="ناوبری اصلی">
+    <a class="brand" href="/docs/">مستندات گپ</a><a href="/docs/">خانه</a>
+    <a href="/docs/architecture.html" aria-current="page">معماری</a><a href="/docs/data-model.html">مدل داده</a>
+    <a href="/docs/request-flows.html">جریان‌ها</a><a href="/docs/frontend-security.html">رابط و امنیت</a><a href="/docs/operations.html">اجرا و نگهداری</a>
+</nav></header>
+<main class="container">
+    <section class="hero"><span class="eyebrow">بخش اول</span><h1>معماری و ساختار کد</h1><p class="lead">مرز لایه‌ها، پوشه‌های اصلی و مسئولیت اجزای backend در پروژه Laravel.</p></section>
+
+    <nav class="toc" aria-label="فهرست صفحه"><strong>در این صفحه</strong><ul>
+        <li><a href="#stack">پشته فناوری</a></li><li><a href="#tree">ساختار پوشه‌ها</a></li>
+        <li><a href="#layers">لایه‌ها</a></li><li><a href="#controllers">Controllerها</a></li><li><a href="#services">Serviceها</a></li>
+    </ul></nav>
+
+    <h2 id="stack">پشته فناوری</h2>
+    <div class="table-wrap"><table><thead><tr><th>حوزه</th><th>فناوری</th><th>کاربرد</th></tr></thead><tbody>
+        <tr><td>Backend</td><td>PHP 8.5، Laravel 13</td><td>HTTP، احراز هویت، persistence و API خارجی</td></tr>
+        <tr><td>UI</td><td>Blade، Tailwind CSS 4، Vite 8</td><td>رندر صفحه و build دارایی‌ها</td></tr>
+        <tr><td>Reactive UI</td><td>Livewire 4</td><td>جستجو و مدیریت sidebar گفتگوها</td></tr>
+        <tr><td>Browser</td><td>JavaScript ساده</td><td>fetch، Markdown، صوت، فایل و History API</td></tr>
+        <tr><td>Data</td><td>SQLite و Eloquent</td><td>ذخیره کاربران، گفتگو و مصرف</td></tr>
+        <tr><td>Test</td><td>Pest 4 و PHPUnit 12</td><td>Feature و Unit test</td></tr>
+    </tbody></table></div>
+
+    <h2 id="tree">ساختار پوشه‌ها</h2>
+    <pre><code>app/
+├── Console/Commands/          فرمان ساخت کاربر مدیر
+├── Exceptions/                خطاهای پیکربندی و پاسخ OpenAI
+├── Http/
+│   ├── Controllers/           ورودی‌های HTTP و هماهنگی use caseها
+│   │   ├── Admin/             پنل مدیریت کاربران و مصرف
+│   │   └── Auth/              ثبت‌نام، ورود، تأیید و بازیابی رمز
+│   ├── Middleware/            کنترل حساب فعال و دسترسی مدیر
+│   └── Requests/              validation و authorization ورودی
+├── Livewire/                  sidebar گفتگو و پوشه‌ها
+├── Models/                    مدل‌های Eloquent
+├── Policies/                  قواعد مالکیت resourceها
+└── Services/                  OpenAIClient و ChatOwner
+
+bootstrap/app.php              ثبت route، middleware و خطاهای JSON
+config/services.php            مدل‌ها، قیمت و تنظیمات OpenAI
+database/                      migration، factory و seeder
+resources/                     CSS، JavaScript و Blade
+routes/web.php                 ۳۴ route برنامه
+tests/                         تست‌های Pest
+docker/                        entrypoint، Caddy و PHP</code></pre>
+
+    <h2 id="layers">لایه‌ها و مسیر درخواست</h2>
+    <div class="diagram"><div class="node">Route و Middleware</div><span class="arrow">←</span><div class="node">Form Request</div><span class="arrow">←</span><div class="node">Controller</div><span class="arrow">←</span><div class="node">Service / Model</div><span class="arrow">←</span><div class="node">Response</div></div>
+    <h3>Route و Middleware</h3>
+    <p>تمام routeها در <code>routes/web.php</code> قرار دارند و سه محدوده اصلی دارند: routeهای مهمان برای auth، routeهای کاربر واردشده برای خروج و تأیید ایمیل، و گروه <code>auth + active + verified</code> برای امکانات برنامه. Middlewareهای سفارشی <code>active</code> و <code>admin</code> در <code>bootstrap/app.php</code> ثبت شده‌اند.</p>
+    <h3>Form Request و Policy</h3>
+    <p>اعتبارسنجی پیام، فایل، صوت، تنظیم گفتگو و عملیات مدیر در Form Requestها قرار دارد. Policyها مالکیت گفتگو، پوشه و سند دانش را کنترل می‌کنند؛ بعضی endpointهای فقط‌خواندنی نیز مالکیت را با شرط مستقیم <code>user_id</code> بررسی می‌کنند.</p>
+
+    <h2 id="controllers">Controllerهای اصلی</h2>
+    <div class="table-wrap"><table><thead><tr><th>کلاس</th><th>مسئولیت</th></tr></thead><tbody>
+        <tr><td><code>ChatPageController</code></td><td>آماده‌سازی صفحه، مدل‌های مجاز، مصرف، اسناد و گفتگوی اولیه</td></tr>
+        <tr><td><code>ChatController</code></td><td>کنترل سهمیه/مدل، فراخوانی OpenAI و ذخیره اتمیک پیام و مصرف</td></tr>
+        <tr><td><code>ConversationController</code></td><td>برگرداندن گفتگو و پیام‌ها به صورت JSON</td></tr>
+        <tr><td><code>ConversationManagementController</code></td><td>تنظیمات، پوشه، pin، archive، share، export و delete</td></tr>
+        <tr><td><code>ChatAttachmentController</code></td><td>نمایش یا دانلود کنترل‌شده پیوست خصوصی</td></tr>
+        <tr><td><code>KnowledgeDocumentController</code></td><td>هماهنگی فایل محلی با Files و Vector Stores در OpenAI</td></tr>
+        <tr><td><code>SpeechController</code></td><td>تبدیل فایل صوتی به متن</td></tr>
+        <tr><td><code>PublicConversationController</code></td><td>صفحه فقط‌خواندنی گفتگوی shareشده</td></tr>
+        <tr><td><code>Admin\UserController</code></td><td>آمار، نمودار مصرف و کنترل حساب کاربران</td></tr>
+    </tbody></table></div>
+
+    <h2 id="services">Serviceها و مرزهای خارجی</h2>
+    <h3><code>OpenAIClient</code></h3>
+    <p>تمام ارتباط خارجی OpenAI را متمرکز می‌کند: <code>POST /responses</code>، Files، Vector Stores، حذف فایل و <code>POST /audio/transcriptions</code>. اتصال ۱۰ ثانیه و کل درخواست ۱۸۰ ثانیه timeout دارد و دو retry با فاصله ۲۰۰ و ۵۰۰ میلی‌ثانیه انجام می‌شود.</p>
+    <h3><code>ChatOwner</code></h3>
+    <p>UUID دائمی <code>chat_owner_token</code> را در cookie مدیریت می‌کند. این token برای انتقال گفتگوهای legacy بدون حساب به حساب کاربری هنگام اولین ورود باقی مانده است.</p>
+    <div class="note">صفحه بعدی: <a href="/docs/data-model.html">مدل داده و روابط ذخیره‌سازی</a>.</div>
+</main><footer class="footer">مستندات داخلی پروژه chat-openai-client</footer>
+</body></html>

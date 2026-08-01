@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="مستندات ساختار و عملکرد پروژه گپ">
+    <title>مستندات فنی پروژه گپ</title>
+    <link rel="stylesheet" href="/docs/assets/styles.css">
+</head>
+<body>
+<header class="site-header">
+    <nav class="nav" aria-label="ناوبری اصلی">
+        <a class="brand" href="/docs/">مستندات گپ</a>
+        <a href="/docs/" aria-current="page">خانه</a>
+        <a href="/docs/architecture.html">معماری</a>
+        <a href="/docs/data-model.html">مدل داده</a>
+        <a href="/docs/request-flows.html">جریان‌ها</a>
+        <a href="/docs/frontend-security.html">رابط و امنیت</a>
+        <a href="/docs/operations.html">اجرا و نگهداری</a>
+    </nav>
+</header>
+<main class="container">
+    <section class="hero">
+        <span class="eyebrow">نسخه مستندات: ۱ اوت ۲۰۲۶</span>
+        <h1>ساختار و عملکرد پروژه «گپ»</h1>
+        <p class="lead">راهنمای فنی یک کلاینت چت فارسی برای OpenAI که با Laravel، Blade، Livewire و JavaScript ساخته شده است. مطالب بر اساس کد فعلی پروژه دسته‌بندی شده‌اند.</p>
+        <div class="facts">
+            <div class="fact"><strong>Laravel 13</strong><span>Backend</span></div>
+            <div class="fact"><strong>Livewire 4</strong><span>Sidebar تعاملی</span></div>
+            <div class="fact"><strong>SQLite</strong><span>دیتابیس پیش‌فرض</span></div>
+            <div class="fact"><strong>۴۲ تست</strong><span>Pest Feature/Unit</span></div>
+        </div>
+    </section>
+
+    <h2>دسته‌بندی مستندات</h2>
+    <div class="grid">
+        <a class="card" href="/docs/architecture.html">
+            <h3>معماری و ساختار کد</h3>
+            <p>نمای کلان، پوشه‌ها، لایه‌ها، Controllerها، Serviceها و مرز مسئولیت اجزا.</p>
+        </a>
+        <a class="card" href="/docs/data-model.html">
+            <h3>مدل داده و ذخیره‌سازی</h3>
+            <p>جدول‌ها، روابط Eloquent، قواعد حذف، پیوست‌ها و محاسبه مصرف.</p>
+        </a>
+        <a class="card" href="/docs/request-flows.html">
+            <h3>جریان‌های اجرایی</h3>
+            <p>ارسال پیام، Responses API، تصویر، وب، RAG، گفتار و مدیریت گفتگو.</p>
+        </a>
+        <a class="card" href="/docs/frontend-security.html">
+            <h3>رابط کاربری و امنیت</h3>
+            <p>Blade، Livewire، JavaScript، Markdown امن، احراز هویت و authorization.</p>
+        </a>
+        <a class="card" href="/docs/operations.html">
+            <h3>اجرا، تست و نگهداری</h3>
+            <p>تنظیمات، توسعه، Docker، خطاها، تست‌ها و نکات عملیاتی.</p>
+        </a>
+    </div>
+
+    <h2>نمای کلان سامانه</h2>
+    <div class="diagram" aria-label="نمودار معماری کلان">
+        <div class="node">مرورگر<br>Blade + JS + Livewire</div>
+        <span class="arrow">←</span>
+        <div class="node">Laravel 13<br>Route + Controller</div>
+        <span class="arrow">←</span>
+        <div class="node">SQLite و<br>Storage خصوصی</div>
+        <span class="arrow">↔</span>
+        <div class="node">OpenAI API<br>Responses + Files</div>
+    </div>
+    <p>پروژه یک Laravel monolith است. Laravel احراز هویت، APIهای داخلی، مدیریت گفتگو، پنل مدیر و ارتباط خارجی با OpenAI را انجام می‌دهد. رابط اولیه سمت سرور رندر می‌شود و تعاملات چت از طریق fetch و Livewire انجام می‌گیرند.</p>
+</main>
+<footer class="footer">مستندات داخلی پروژه chat-openai-client</footer>
+</body>
+</html>

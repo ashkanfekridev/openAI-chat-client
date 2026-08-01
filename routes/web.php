@@ -14,10 +14,15 @@ use App\Http\Controllers\ChatPageController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\ConversationFolderController;
 use App\Http\Controllers\ConversationManagementController;
+use App\Http\Controllers\DocumentationController;
 use App\Http\Controllers\KnowledgeDocumentController;
 use App\Http\Controllers\PublicConversationController;
 use App\Http\Controllers\SpeechController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/docs/{path?}', DocumentationController::class)
+    ->where('path', '.*')
+    ->name('documentation');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
